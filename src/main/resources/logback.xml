@@ -10,7 +10,7 @@
     <property scope="context" name="total.size.cap" value="${total.size.cap:-0}"/>
     <property scope="context" name="async.appender.queue.size" value="${async.appender.queue.size:-1000}"/>
 
-    <appender name="COMMON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+<!--    <appender name="COMMON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>${logging.dir}/common.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
             <maxFileSize>${max.file.size}</maxFileSize>
@@ -21,7 +21,7 @@
         <encoder>
             <pattern>${message.pattern}</pattern>
         </encoder>
-    </appender>
+    </appender>-->
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -29,18 +29,18 @@
         </encoder>
     </appender>
 
-    <appender name="COMMON" class="ch.qos.logback.classic.AsyncAppender">
+<!--    <appender name="COMMON" class="ch.qos.logback.classic.AsyncAppender">
         <appender-ref ref="COMMON_FILE"/>
         <queueSize>${async.appender.queue.size}</queueSize>
         <neverBlock>true</neverBlock>
-    </appender>
+    </appender>-->
 
     <include optional="true" resource="included.logback.xml"/>
     <include optional="true" file="${${configDir.parameter}:-./config}/logback.xml"/>
 
     <root level="DEBUG">
         <appender-ref ref="STDOUT"/>
-        <appender-ref ref="COMMON"/>
+<!--        <appender-ref ref="COMMON"/>-->
     </root>
 
 </configuration>
