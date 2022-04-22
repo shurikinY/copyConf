@@ -19,7 +19,7 @@ public var AUDIT_DATE = ""
 class CommonConstants {
 
     // версия программы
-    val VERSION = "1.0.5.15"
+    val VERSION = "1.0.5.15.1"
 
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2
@@ -29,6 +29,7 @@ class CommonConstants {
         "audit_date",
         "audit_state",
         "audit_user_id",
+        "scale_id",
         "@isLoad"   // это не колонка из таблицы, это поле используется для проверки загружен объект в базу или нет
     )
 
@@ -59,7 +60,7 @@ class CommonConstants {
 fun main(args: Array<String>) {
 
     val logger = LoggerFactory.getLogger("Main")
-    logger.info("SOLAR DataBase Copy Configuration Tool " + CommonConstants().VERSION, false)
+    logger.info("SOLAR DataBase Copy Configuration Tool " + CommonConstants().VERSION)
 
     var argsString = " "
     for (arg in args) {
