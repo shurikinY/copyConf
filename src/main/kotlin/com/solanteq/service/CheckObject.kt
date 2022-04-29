@@ -39,7 +39,7 @@ class CheckObject {
 
         // установка соединения с БД
         conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-        logger.info("DataBase connection parameters: dbconn=$CONN_STRING dbuser=$CONN_LOGIN dbpass=$CONN_PASS.")
+        //logger.info("DataBase connection parameters: dbconn=$CONN_STRING dbuser=$CONN_LOGIN dbpass=$CONN_PASS.")
 
         // проверка цикличности ссылок
         // цикл по главным объектам (главные объекты это объекты, которые нужно загрузить в БД).
@@ -52,8 +52,15 @@ class CheckObject {
             // цикл по объектам linkObjects
             for (oneCheckLinkObj in oneCheckObject.row.linkObjects) {
                 oneConfCheckObj = jsonConfigFile.objects.find { it.code == oneCheckLinkObj.code }!!
-                //chainCheckObject = mutableListOf<DataDB>(oneCheckLinkObj)
                 checkRingReference(chainCheckObject, oneConfCheckObj, jsonConfigFile, allCheckObject.element)
+
+                // цикл по объектам scaleObjects
+                oneCheckLinkObj.row.scaleObjects.let { scaleObjects ->
+                    for (oneCheckScaleObj in scaleObjects) {
+                        oneConfCheckObj = jsonConfigFile.objects.find { it.code == oneCheckScaleObj.code }!!
+                        checkRingReference(chainCheckObject, oneConfCheckObj, jsonConfigFile, allCheckObject.element)
+                    }
+                }
             }
         }
 
@@ -65,6 +72,13 @@ class CheckObject {
             // цикл по объектам linkObjects
             for (oneCheckLinkObj in oneCheckObject.row.linkObjects) {
                 checkOneObject(oneCheckLinkObj, jsonConfigFile, allCheckObject.element)
+
+                // цикл по объектам scaleObjects
+                oneCheckLinkObj.row.scaleObjects.let { scaleObjects ->
+                    for (oneCheckScaleObj in scaleObjects) {
+                        checkOneObject(oneCheckScaleObj, jsonConfigFile, allCheckObject.element)
+                    }
+                }
             }
         }
         conn.close()
@@ -122,6 +136,11 @@ class CheckObject {
         val keyFieldIn = oneConfClassRefObj.keyFieldIn
         // идентификатор референсного объекта
         val keyFieldInValue = oneCheckRefObj.row.fields.find { it.fieldName == keyFieldIn }!!.fieldValue
+
+        // ссылки на шкалу пропускаю, т.к. в них только id самой шкалы: проверять нечего
+        if (oneCheckRefObj.typeRef.lowercase() == "inparentscale" || oneCheckRefObj.typeRef.lowercase() == "inscale") {
+            return
+        }
 
         if (oneCheckRefObj.nestedLevel == 2) {
             ReaderDB().checkFldOutForLink(
@@ -608,7 +627,7 @@ class CheckObject {
                     idObjectInDB
                     //listFieldObject,
                     //-1
-                ) + "The query to match RefTables links for class <${oneRefTablesClass.code}. $sqlQuery"
+                ) + "The query to match RefTables links for class <${oneRefTablesClass.code}>. $sqlQuery"
             )
             val connCmpObjectRefTables = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
             val queryStatement = connCmpObjectRefTables.prepareStatement(sqlQuery)

@@ -19,17 +19,27 @@ public var AUDIT_DATE = ""
 class CommonConstants {
 
     // версия программы
-    val VERSION = "1.0.5.15.1"
+    val VERSION = "1.0.5.16"
 
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2
+
+    val SCALE_ID_FIELD_NAME = "scale_id"
+    val SCALE_COMPONENT_ID_FIELD_NAME = "scale_component_id"
+    val TARIFF_CLASS_NAME = "tariff"
+    val TARIFF_VALUE_CLASS_NAME = "tariffvalue"
+    val NUMBER_TARIFF_VALUE_CLASS_NAME = "numbertariffvalue"
+    val SCALE_COMPONENT_CLASS_NAME = "scalecomponent"
+    val SCALE_COMPONENT_VALUE_CLASS_NAME = "scalecomponentvalue"
+    val SCALE_AMOUNT_CLASS_NAME = "scalableamount"
+    val SCALE_CLASS_NAME = "scale"
 
     // массив полей, которые не выгружаются из БД
     val FIELDS_NOT_EXPORT = arrayOf(
         "audit_date",
         "audit_state",
         "audit_user_id",
-        "scale_id",
+        //"scale_id",
         "@isLoad"   // это не колонка из таблицы, это поле используется для проверки загружен объект в базу или нет
     )
 
@@ -66,7 +76,7 @@ fun main(args: Array<String>) {
     for (arg in args) {
         argsString += "$arg "
     }
-    logger.info("Argument string: $argsString")
+    //logger.info("Argument string: $argsString")
 
     val dbUpdateService = DBUpdateService()
     dbUpdateService.setInputArgs(args)
