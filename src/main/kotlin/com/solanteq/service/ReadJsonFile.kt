@@ -33,8 +33,8 @@ data class ObjectCfg(
     val fieldsNotExport: MutableList<FieldsNotExport>,
     val refFieldsJson: List<FieldsJson>,
     val refTables: List<RefTables>,
-    val scale : List<RefObjects>? = null,
-    val scaleObjects : List<LinkObjects>? = null
+    val scale : List<RefObjects>? = null
+    //val scaleObjects : List<LinkObjects>? = null
 )
 
 data class LinkObjects(

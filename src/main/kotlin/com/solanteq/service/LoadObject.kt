@@ -372,8 +372,8 @@ class LoadObject {
                 ) + "Query to load object: $sqlQuery"
             )
             queryStatement.executeUpdate()
-            //connect.commit()
-            connect.rollback()
+            connect.commit()
+            //connect.rollback()
             connect.close()
         } catch (e: Exception) {
             logger.error(
