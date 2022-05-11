@@ -372,8 +372,8 @@ class LoadObject {
                 ) + "Query to load object: $sqlQuery"
             )
             queryStatement.executeUpdate()
-            //connect.commit()
-            connect.rollback()
+            connect.commit()
+            //connect.rollback()
             connect.close()
         } catch (e: Exception) {
             logger.error(
@@ -598,7 +598,7 @@ class LoadObject {
 
                             // проверка шкал
                             // объекты scaleObjects из базы совпадают/не совпадают с такими же объектами из tariffValue
-                            var isIdenticalScale = false
+                            var isIdenticalScale = true
 
                             // проверяю есть ли шкала у тарифа в БД приемнике. если шкалы нет, значит объекты scaleObjects нужно добавить
                             val loadObjectClass = jsonConfigFile.objects.find { it.code == oneLoadObject.code }!!
