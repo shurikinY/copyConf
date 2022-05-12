@@ -15,6 +15,12 @@ data class DataObjectDest(
     val listChildRef: List<Fields> // значение референсных полей типа InChild
 )
 
+// класс используется для хранения данных о добавленных измеряемых величинах шкалы в рамках одного тарифа
+data class ScaleAmountInDB(
+    var fields: List<Fields>,
+    var newId: String
+)
+
 class LoadObject {
 
     private var dataObjectDestList = mutableListOf<DataObjectDest>()
@@ -23,6 +29,9 @@ class LoadObject {
 
     // коннект к БД
     private lateinit var conn: Connection
+
+    private var listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
+    // ScaleAmountInDB(listOf<Fields>(),"")
 
     //fun loadDataObject(allLoadObject: DataDBMain, jsonConfigFile: RootCfg) {
     fun loadDataObject() {
@@ -182,6 +191,8 @@ class LoadObject {
         jsonConfigFile: RootCfg
     ) {
 
+        listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
+
         val sqlQueryUpdate: String
         val sqlQueryInsertAud: String
         val sqlQueryRefTables: String
@@ -237,7 +248,7 @@ class LoadObject {
                     // инициализация переменных для сиквенса в psql
                     sqlQueryLinkObjInit += "$nextValueRevScaleName=nextval('${CommonConstants().commonSequence}'); \n"
 
-                    // insert в таблицу аудита новой записи объекта linkObject
+                    // insert в таблицу аудита новой записи
                     sqlQueryInsertScale +=
                         createMainInsUpdQuery(
                             oneScaleObject,
@@ -250,10 +261,6 @@ class LoadObject {
                     setNewIdScale(oneLoadObject, idScaleInDB)
                 }
             }
-            /*} else {
-                // если в БД приемнике у тарифа была шкала, то устанавливаю значение этого идентификатора шкалы в объектах файла
-                setNewIdScale(oneLoadObject, idScaleInDB)
-            }*/
         }
 
         // установка нового значения ссылочного поля в файле для референса типа fieldJson
@@ -779,7 +786,7 @@ class LoadObject {
                 }
             }
             //listColNameEqualValue = "am."+listColNameColValue.replace(", ", " and am.").substringBeforeLast("and am.")
-            listColNameEqualValue = listColNameEqualValue.substringBeforeLast("and am.")
+            listColNameEqualValue = listColNameEqualValue.substringBeforeLast("and")
 
             listColNameColValue += "${oneConfClassObj.auditDateField}=dateNow,audit_user_id='42'"
             listColName += "${oneConfClassObj.auditDateField},audit_user_id,audit_state,${oneConfClassObj.keyFieldIn}"
@@ -1155,7 +1162,7 @@ class LoadObject {
                     // инициализация переменных для сиквенса в psql
                     sqlQueryScaleObjInit += "$nextValueRevScaleName=nextval('${CommonConstants().commonSequence}'); \n"
 
-                    // insert в таблицу аудита новой записи объекта linkObject
+                    // insert в таблицу аудита новой записи
                     sqlQueryScale +=
                         createMainInsUpdQuery(
                             scaleComponentObject,
@@ -1166,12 +1173,13 @@ class LoadObject {
                         )
 
                     // работа с объектами scalableAmount
-                    // их нужно добавлять только если в базе не нашёлся такой же объект, в т.ч. совпадающий по полю scale_id
+                    // их нужно добавлять только если в базе(файле) не нашёлся такой же объект, в т.ч. совпадающий по полю scale_id
                     for (scalableAmountObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME }) {
                         jsonConfigFile.objects.find { it.code == scalableAmountObject.code }
                             ?.let { scalableAmountClass ->
 
-                                idScalableAmountObjectInFile = scalableAmountObject.row.fields.find { it.fieldName == scalableAmountClass.keyFieldIn }!!.fieldValue!!
+                                idScalableAmountObjectInFile =
+                                    scalableAmountObject.row.fields.find { it.fieldName == scalableAmountClass.keyFieldIn }!!.fieldValue!!
 
                                 idScalableAmountObjectInDB = ""
                                 // проверка есть ли объект scalableAmount в БД приемнике по полному соответствию (включая поле scale_id)
@@ -1190,6 +1198,20 @@ class LoadObject {
                                     idScalableAmountObjectInDB = queryResult.getString(1)
                                 }
                                 connSelect.close()
+
+                                // ищу объект scalableAmount не в БД, а среди добавленных для тарифа. Это актуально для случая создания новой шкалы/нового тарифа
+                                val newScalableAmountObject = mutableListOf<Fields>()
+                                for ((fieldName, fieldValue) in scalableAmountObject.row.fields) {
+                                    if (scalableAmountClass.fieldsNotExport.find { it.name == fieldName } == null &&
+                                        fieldName != scalableAmountClass.keyFieldIn) {
+                                        newScalableAmountObject.add(Fields(fieldName, fieldValue))
+                                    }
+                                }
+                                listNewScalableAmountObject.find { it.fields == newScalableAmountObject }.let { newId ->
+                                    if (newId != null) {
+                                        idScalableAmountObjectInDB = newId.newId
+                                    }
+                                }
 
                                 // если объекта нет, то insert в таблицу объекта scalableAmount если не найдено полного соответствия
                                 if (idScalableAmountObjectInDB == "") {
@@ -1220,6 +1242,16 @@ class LoadObject {
                                             nextValueRevScaleName,
                                             "insertAudValues"
                                         )
+
+                                    // формирую список новых объектов scalableAmount с новым id в рамках тарифа
+                                    /*if (!listNewScalableAmountObject.contains(
+                                            ScaleAmountInDB(newScalableAmountObject, idScalableAmountObjectInDB)
+                                        )
+                                    ) {*/
+                                    listNewScalableAmountObject.add(
+                                        ScaleAmountInDB(newScalableAmountObject, idScalableAmountObjectInDB)
+                                    )
+                                    //}
                                 }
 
                                 // работа с объектами scaleComponentValue
