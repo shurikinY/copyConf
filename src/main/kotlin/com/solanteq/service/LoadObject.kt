@@ -521,7 +521,8 @@ class LoadObject {
             }
             val sqlQuery = "select * " +
                     "from ${oneLinkObjClass.tableName} " +
-                    "where audit_state = 'A' and ${oneLinkObjDescription.refField} = $idObjectInDB $filterObjCond"
+                    "where audit_state = 'A' and ${oneLinkObjDescription.refField} = $idObjectInDB $filterObjCond " +
+                    "and (valid_to is null or valid_to >= CURRENT_DATE)"
 
             logger.debug(
                 CommonFunctions().createObjectIdForLogMsg(
@@ -565,7 +566,8 @@ class LoadObject {
                     var isLinkObjectFieldsEqual = true
                     for ((fieldName, fieldValue) in linkObjectFieldsFromDB) {
                         if (fieldName != oneLinkObjClass.keyFieldIn && oneLinkObject.row.fields.find { it.fieldName == fieldName }!!.fieldValue != fieldValue &&
-                            oneLinkObjClass.scale?.find { it.refField == fieldName } == null) {
+                            oneLinkObjClass.scale?.find { it.refField == fieldName } == null
+                        ) {
                             logger.debug(
                                 CommonFunctions().createObjectIdForLogMsg(
                                     oneLinkObjClass.code,
@@ -594,6 +596,16 @@ class LoadObject {
                             ) + "The linkObject from receiver database has been found in the file by identical field values. " +
                                     "The file linkObject ID <$linkObjectFromFileId>."
                         )
+
+                        // Важно. Заменяю значение поля tariff_value.scale_component_id из файла на найденное значение из БД
+                        val valueOfScaleComponetIdFieldFromDB =
+                            linkObjectFieldsFromDB.find { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }?.fieldValue
+                        val indexOfScaleComponetIdField =
+                            oneLinkObject.row.fields.indexOfFirst { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }
+                        if (indexOfScaleComponetIdField > -1) {
+                            oneLinkObject.row.fields[indexOfScaleComponetIdField].fieldValue =
+                                valueOfScaleComponetIdFieldFromDB
+                        }
 
                         if (CheckObject().compareObjectRefTables(
                                 linkObjectFromDBId,
