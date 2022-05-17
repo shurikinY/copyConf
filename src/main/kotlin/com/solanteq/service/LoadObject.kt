@@ -564,7 +564,8 @@ class LoadObject {
                     // сравниваю значение полей
                     var isLinkObjectFieldsEqual = true
                     for ((fieldName, fieldValue) in linkObjectFieldsFromDB) {
-                        if (fieldName != oneLinkObjClass.keyFieldIn && oneLinkObject.row.fields.find { it.fieldName == fieldName }!!.fieldValue != fieldValue) {
+                        if (fieldName != oneLinkObjClass.keyFieldIn && oneLinkObject.row.fields.find { it.fieldName == fieldName }!!.fieldValue != fieldValue &&
+                            oneLinkObjClass.scale?.find { it.refField == fieldName } == null) {
                             logger.debug(
                                 CommonFunctions().createObjectIdForLogMsg(
                                     oneLinkObjClass.code,
