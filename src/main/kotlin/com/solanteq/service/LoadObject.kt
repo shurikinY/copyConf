@@ -258,9 +258,15 @@ class LoadObject {
                             "insertAudValues"
                         ) + "\n"
 
-                    setNewIdScale(oneLoadObject, idScaleInDB)
+                    //setNewIdScale(oneLoadObject, idScaleInDB)
                 }
             }
+
+            // установка значения идентификатора шкалы в файле
+            if (idScaleInDB != "") {
+                setNewIdScale(oneLoadObject, idScaleInDB)
+            }
+
         }
 
         // установка нового значения ссылочного поля в файле для референса типа fieldJson
