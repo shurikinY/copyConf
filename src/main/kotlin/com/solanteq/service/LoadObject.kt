@@ -23,6 +23,14 @@ data class ScaleAmountInDB(
 
 class LoadObject {
 
+    // считывание конфигурации
+    private val readJsonFile = ReadJsonFile()
+    private val jsonConfigFile = readJsonFile.readConfig()
+
+    var scalable = Scalable(jsonConfigFile)
+
+    var readerDB = ReaderDB()
+
     private var dataObjectDestList = mutableListOf<DataObjectDest>()
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -37,8 +45,8 @@ class LoadObject {
     fun loadDataObject() {
 
         // считывание конфигурации
-        val readJsonFile = ReadJsonFile()
-        val jsonConfigFile = readJsonFile.readConfig()
+        //val readJsonFile = ReadJsonFile()
+        //val jsonConfigFile = readJsonFile.readConfig()
         logger.info("Configuration info: " + jsonConfigFile.cfgList[0])
 
         // формирования списка полей, которые не нужно выгружать, для каждого класса
@@ -210,7 +218,10 @@ class LoadObject {
 
         // получаю идентификатор шкалы
         var idScaleInDB = ""
-        if (oneConfClassObj.code.lowercase() == CommonConstants().TARIFF_CLASS_NAME) {
+        //if (oneConfClassObj.code.lowercase() == CommonConstants().TARIFF_CLASS_NAME) {
+
+        // если у класса есть шкала, то работаем с ней
+        if (scalable.isClassHaveScale(oneConfClassObj)) {
 
             // знаю ид тарифа в БД приемнике. ищу связанную с ним шкалу
             idScaleInDB = findScaleIdInDB(oneConfClassObj, idObjectInDB)
@@ -224,11 +235,15 @@ class LoadObject {
                 // шкала есть в тарифе в БД приемнике или в тарифе в файле
                 if (idScaleInDB != "") {
                     // добавляю новую шкалу в базу
-                    val scaleClass =
-                        jsonConfigFile.objects.find { it.code.lowercase() == CommonConstants().SCALE_CLASS_NAME }!!
+
+                    //val scaleConfigClass =
+                    //    jsonConfigFile.objects.find { it.code.lowercase() == CommonConstants().SCALE_CLASS_NAME }!!
+
+                    // проверка есть в CheckObject "There is no description of scale class in configuration file", поэтому здесь не упадет
+                    val scaleClass = scalable.getScaleConfigClassDescription()!!
 
                     val oneScaleObject = DataDB(
-                        CommonConstants().SCALE_CLASS_NAME,
+                        scalable.getClassNameByScaleKeyType("InScale"),//CommonConstants().SCALE_CLASS_NAME,
                         oneLoadObject.loadMode,
                         Row(listOf<Fields>(), listOf<RefObject>(), listOf<DataDB>(), listOf<DataDB>())
                     )
@@ -604,13 +619,15 @@ class LoadObject {
                         )
 
                         // Важно. Заменяю значение поля tariff_value.scale_component_id из файла на найденное значение из БД
-                        val valueOfScaleComponetIdFieldFromDB =
-                            linkObjectFieldsFromDB.find { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }?.fieldValue
-                        val indexOfScaleComponetIdField =
-                            oneLinkObject.row.fields.indexOfFirst { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }
-                        if (indexOfScaleComponetIdField > -1) {
-                            oneLinkObject.row.fields[indexOfScaleComponetIdField].fieldValue =
-                                valueOfScaleComponetIdFieldFromDB
+                        val valueOfScaleComponentIdFieldFromDB =
+                            //linkObjectFieldsFromDB.find { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }?.fieldValue
+                            linkObjectFieldsFromDB.find { it.fieldName == scalable.scaleComponentFieldName }?.fieldValue
+                        val indexOfScaleComponentIdField =
+                            //oneLinkObject.row.fields.indexOfFirst { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }
+                            oneLinkObject.row.fields.indexOfFirst { it.fieldName == scalable.scaleComponentFieldName }
+                        if (indexOfScaleComponentIdField > -1) {
+                            oneLinkObject.row.fields[indexOfScaleComponentIdField].fieldValue =
+                                valueOfScaleComponentIdFieldFromDB
                         }
 
                         if (CheckObject().compareObjectRefTables(
@@ -633,7 +650,8 @@ class LoadObject {
                             // поиск в БД приемнике scaleObjects и их сравнение с аналогичными объектами из файла
                             if (idScaleInDB != "") {
                                 val linkObjectClass = jsonConfigFile.objects.find { it.code == oneLinkObject.code }!!
-                                isIdenticalScale = ReaderDB().readScaleObject(
+                                //isIdenticalScale = ReaderDB().readScaleObject(
+                                isIdenticalScale = readerDB.readScaleObject(
                                     linkObjectClass,
                                     jsonConfigFile,
                                     oneLinkObject.row.fields,
@@ -713,7 +731,8 @@ class LoadObject {
 
                 // запрос для вставки scaleObject. должен быть перед формированием запроса на вставку linkObject (sqlQueryLinkObject),
                 //   т.к. внутри createScaleObjectsQuery генерится новый scale_component_id и сохраняется в linkObject из файла
-                if (oneLinkObject.code.lowercase() == CommonConstants().TARIFF_VALUE_CLASS_NAME || oneLinkObject.code.lowercase() == CommonConstants().NUMBER_TARIFF_VALUE_CLASS_NAME) {
+                //if (oneLinkObject.code.lowercase() == CommonConstants().TARIFF_VALUE_CLASS_NAME || oneLinkObject.code.lowercase() == CommonConstants().NUMBER_TARIFF_VALUE_CLASS_NAME) {
+                if (scalable.isClassHaveScaleComponent(oneLinkObject)) {
                     val listQueryCondition = createScaleObjectsQuery(oneLinkObject, jsonConfigFile, cntVar)
                     sqlQueryLinkObjDeclare += listQueryCondition[0]
                     sqlQueryLinkObjInit += listQueryCondition[1]
@@ -852,20 +871,22 @@ class LoadObject {
         } else if (regimQuery == "selectScalableAmount") {
             sqlQuery = ""
             if (oneLoadObject != null) {
-                //val idScaleId =
-                //    oneLoadObject.row.fields.find { it.fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME }!!.fieldValue
-                /*sqlQuery = " if not exists(select distinct 1 " +
-                        " from trf_scale_component comp " +
-                        " join trf_scale_component_value val on val.component_id = comp.id " +
-                        " join trf_scalable_amount am on am.id = val.scalable_amount_id " +
-                        " where $listColNameEqualValue ) then \n" +
-                        createMainInsUpdQuery(oneLoadObject, oneConfClassObj, idObjectInDB, "", "insert") +
-                        " end if; \n"*/
-                sqlQuery = " select distinct am.id " +
-                        " from trf_scale_component comp " +
-                        " join trf_scale_component_value val on val.component_id = comp.id " +
-                        " join trf_scalable_amount am on am.id = val.scalable_amount_id " +
+
+                val scaleCompClass = scalable.getClassDescriptionByCode(scalable.scaleComponentClassName)
+                val scaleCompValueClass = scalable.getClassDescriptionByCode(scalable.scaleComponentValueClassName)
+                val scalableAmountClass = scalable.getClassDescriptionByCode(scalable.scalableAmountClassName)
+
+                sqlQuery = " select distinct am.${scalableAmountClass.keyFieldIn} " +
+                        " from ${scaleCompClass.tableName} comp " +
+                        " join ${scaleCompValueClass.tableName} val on val.${scalable.scaleComponentValueFieldName} = comp.${scaleCompClass.keyFieldIn} " +
+                        " join ${scalableAmountClass.tableName} am on am.${scalableAmountClass.keyFieldIn} = val.${scalable.scalableAmountFieldName} " +
                         " where $listColNameEqualValue; \n"
+
+                /*sqlQuery = " select distinct am.id " +
+                        " from trf_scale_component comp " +
+                        " join trf_scale_component_value val on val.component_id = comp.id " +
+                        " join trf_scalable_amount am on am.id = val.scalable_amount_id " +
+                        " where $listColNameEqualValue; \n"*/
             }
         } else {
             sqlQuery = "update ${oneConfClassObj.tableName} set $listColNameColValue " +
@@ -1152,14 +1173,16 @@ class LoadObject {
         var nextValueRevScaleName = ""
         var idScalableAmountObjectInFile = ""
 
-        oneLinkObject.row.scaleObjects.find { it.code.lowercase() == CommonConstants().SCALE_COMPONENT_CLASS_NAME }
+        //oneLinkObject.row.scaleObjects.find { it.code.lowercase() == CommonConstants().SCALE_COMPONENT_CLASS_NAME }
+        oneLinkObject.row.scaleObjects.find { it.code.lowercase() == scalable.scaleComponentClassName }
             ?.let { scaleComponentObject ->
                 jsonConfigFile.objects.find { it.code == scaleComponentObject.code }?.let { scaleComponentClass ->
                     idScaleComponentObjectInDB = nextSequenceValue(scaleComponentClass.sequence)
 
                     // перед формированием запроса для объекта linkObject подставляю новое значение поля scale_component_id
                     indexOfField =
-                        oneLinkObject.row.fields.indexOfFirst { it.fieldName.lowercase() == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }
+                            //oneLinkObject.row.fields.indexOfFirst { it.fieldName.lowercase() == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }
+                        oneLinkObject.row.fields.indexOfFirst { it.fieldName.lowercase() == scalable.scaleComponentFieldName }
                     oneLinkObject.row.fields[indexOfField].fieldValue = idScaleComponentObjectInDB
 
                     // insert в таблицу объекта scaleComponent
@@ -1193,7 +1216,8 @@ class LoadObject {
 
                     // работа с объектами scalableAmount
                     // их нужно добавлять только если в базе(файле) не нашёлся такой же объект, в т.ч. совпадающий по полю scale_id
-                    for (scalableAmountObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME }) {
+                    //for (scalableAmountObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME }) {
+                    for (scalableAmountObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == scalable.scalableAmountClassName }) {
                         jsonConfigFile.objects.find { it.code == scalableAmountObject.code }
                             ?.let { scalableAmountClass ->
 
@@ -1274,8 +1298,10 @@ class LoadObject {
                                 }
 
                                 // работа с объектами scaleComponentValue
-                                for (scaleComponentValueObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == CommonConstants().SCALE_COMPONENT_VALUE_CLASS_NAME }
-                                    .filter { it.row.fields.find { fields -> fields.fieldName.lowercase() == "scalable_amount_id" && fields.fieldValue == idScalableAmountObjectInFile } != null }
+                                //for (scaleComponentValueObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == CommonConstants().SCALE_COMPONENT_VALUE_CLASS_NAME }
+                                //.filter { it.row.fields.find { fields -> fields.fieldName.lowercase() == "scalable_amount_id" && fields.fieldValue == idScalableAmountObjectInFile } != null }
+                                for (scaleComponentValueObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == scalable.scaleComponentValueClassName }
+                                    .filter { it.row.fields.find { fields -> fields.fieldName.lowercase() == scalable.scalableAmountFieldName && fields.fieldValue == idScalableAmountObjectInFile } != null }
                                 ) {
                                     jsonConfigFile.objects.find { it.code == scaleComponentValueObject.code }
                                         ?.let { scaleComponentValueClass ->
@@ -1284,12 +1310,14 @@ class LoadObject {
 
                                             // перед формированием запроса для объекта scaleComponentValue подставляю значение полей component_id и scalable_amount_id
                                             indexOfField =
-                                                scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == "component_id" }
+                                                scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == scalable.scaleComponentValueFieldName }
+                                                //scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == "component_id" }
                                             scaleComponentValueObject.row.fields[indexOfField].fieldValue =
                                                 idScaleComponentObjectInDB
 
                                             indexOfField =
-                                                scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == "scalable_amount_id" }
+                                                scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == scalable.scalableAmountFieldName }
+                                                //scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == "scalable_amount_id" }
                                             scaleComponentValueObject.row.fields[indexOfField].fieldValue =
                                                 idScalableAmountObjectInDB
 
@@ -1382,22 +1410,34 @@ class LoadObject {
 
         // установка нового значения шкалы в тарифе
         var indexOfScaleField =
-            oneLoadObject.row.fields.indexOfFirst { it.fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME }
+            oneLoadObject.row.fields.indexOfFirst {
+                it.fieldName.lowercase() == scalable.getScaleIdFieldName(
+                    oneLoadObject
+                )
+            }
+        //oneLoadObject.row.fields.indexOfFirst { it.fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME }
         if (indexOfScaleField > -1 && oneLoadObject.row.fields[indexOfScaleField].fieldValue != idScaleInDB) {
             oneLoadObject.row.fields[indexOfScaleField].fieldValue = idScaleInDB
         }
 
         // установка нового значения шкалы в scalableAmount и scaleComponent
-        for (oneLinkObject in oneLoadObject.row.linkObjects.filter { it.code.lowercase() == CommonConstants().TARIFF_VALUE_CLASS_NAME || it.code.lowercase() == CommonConstants().NUMBER_TARIFF_VALUE_CLASS_NAME }) {
-            for (oneScaleObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == CommonConstants().SCALE_COMPONENT_CLASS_NAME || it.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME }) {
+        //for (oneLinkObject in oneLoadObject.row.linkObjects.filter { it.code.lowercase() == CommonConstants().TARIFF_VALUE_CLASS_NAME || it.code.lowercase() == CommonConstants().NUMBER_TARIFF_VALUE_CLASS_NAME }) {
+        //    for (oneScaleObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == CommonConstants().SCALE_COMPONENT_CLASS_NAME || it.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME }) {
+        for (oneLinkObject in oneLoadObject.row.linkObjects) {
+            for (oneScaleObject in oneLinkObject.row.scaleObjects) {
                 indexOfScaleField =
-                    oneScaleObject.row.fields.indexOfFirst { it.fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME }
+                    oneScaleObject.row.fields.indexOfFirst {
+                        it.fieldName.lowercase() == scalable.getScaleIdFieldName(
+                            oneLoadObject
+                        )
+                    }
+                //oneScaleObject.row.fields.indexOfFirst { it.fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME }
                 if (indexOfScaleField > -1 && oneScaleObject.row.fields[indexOfScaleField].fieldValue != idScaleInDB) {
                     oneScaleObject.row.fields[indexOfScaleField].fieldValue = idScaleInDB
                 }
             }
         }
     }
-
+    //scalable.isClassHaveScaleComponent(oneLinkObject)
 }
 

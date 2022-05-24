@@ -13,7 +13,7 @@ class CheckObject {
     public var jsonConfigFile = RootCfg(listOf<CfgList>(), listOf<ObjectCfg>())
 
     // коннект к БД
-    lateinit var conn: Connection
+    private lateinit var conn: Connection
 
     fun checkDataObject() {
 
@@ -22,6 +22,8 @@ class CheckObject {
         jsonConfigFile = readJsonFile.readConfig()
         //val jsonConfigFile1 = configJson.readJsonFile<RootCfg>(CONFIG_FILE)
         logger.info("Configuration info: " + jsonConfigFile.cfgList[0])
+
+        val scalable = Scalable(jsonConfigFile)
 
         // формирования списка полей, которые не нужно выгружать, для каждого класса
         CommonFunctions().createListFieldsNotExport(jsonConfigFile)
@@ -34,6 +36,13 @@ class CheckObject {
             jsonConfigFile.cfgList[0].cfgName != allCheckObject.cfgList[0].cfgName
         ) {
             logger.error("Different versions or cfgName of Configuration File and Object File.")
+            exitProcess(-1)
+        }
+
+        // Проверка наличия класса шкалы в файле конфигурации.
+        // Если в импортируемом файле есть не пустая структура scaleObjects, а в файле конфигурации нет класса шкалы, то ошибка.
+        if (scalable.getClassNameByScaleKeyType("InScale") == "" && allCheckObject.element.find { it.row.linkObjects.find { linkObjects-> linkObjects.row.scaleObjects.isNotEmpty() } != null } != null ) {
+            logger.error("There is no description of scale class in configuration file.")
             exitProcess(-1)
         }
 

@@ -59,6 +59,12 @@ data class FilterFields(
 // Чтение данных из БД согласно конфигурации. Создание json
 class ReaderDB {
 
+    // считывание конфигурации
+    val readJsonFile = ReadJsonFile()
+    val jsonConfigFile = readJsonFile.readConfig()
+
+    var scalable = Scalable(jsonConfigFile)
+
     private val logger = LoggerFactory.getLogger(javaClass)
 
     // список ссылочных объектов для одного основного
@@ -89,8 +95,8 @@ class ReaderDB {
     fun readAllObject() {
 
         // считывание конфигурации
-        val readJsonFile = ReadJsonFile()
-        val jsonConfigFile = readJsonFile.readConfig()
+        //val readJsonFile = ReadJsonFile()
+        //val jsonConfigFile = readJsonFile.readConfig()
 
         // считывание файла фильтра
         var jsonConfigFilterFile: FilterCfg? = null
@@ -188,8 +194,8 @@ class ReaderDB {
     fun readTaskObjects() {
 
         // считывание конфигурации
-        val readJsonFile = ReadJsonFile()
-        val jsonConfigFile = readJsonFile.readConfig()
+        //val readJsonFile = ReadJsonFile()
+        //val jsonConfigFile = readJsonFile.readConfig()
         //val jsonConfigFile = configJson.readJsonFile<RootCfg>(CONFIG_FILE)
 
         logger.info("Configuration info: " + jsonConfigFile.cfgList[0])
@@ -1058,134 +1064,137 @@ class ReaderDB {
         scaleObjects: List<DataDB>
     ): Boolean {
 
-        if ((oneConfigClass.code.lowercase() == CommonConstants().NUMBER_TARIFF_VALUE_CLASS_NAME || oneConfigClass.code.lowercase() == CommonConstants().TARIFF_VALUE_CLASS_NAME) &&
+        val scalable = Scalable(jsonConfigFile)
+        //if ((oneConfigClass.code.lowercase() == CommonConstants().NUMBER_TARIFF_VALUE_CLASS_NAME || oneConfigClass.code.lowercase() == CommonConstants().TARIFF_VALUE_CLASS_NAME) &&
+        if (scalable.isClassHaveScaleComponent(oneConfigClass) &&
             !oneConfigClass.scale.isNullOrEmpty() &&
-            tblFieldsOneObj.find { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }!!.fieldValue != null
+            //tblFieldsOneObj.find { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }!!.fieldValue != null
+            tblFieldsOneObj.find { it.fieldName == scalable.scaleComponentFieldName }!!.fieldValue != null
         ) {
 
             // выгрузка объектов scaleComponent. Ссылка по референсу с keyType=InScaleComponent из класса numbertariffvalue или tariffvalue
             val trfValueScaleObjects = oneConfigClass.scale
             //oneConfigClass.scale.let { trfValueScaleObjects ->
-                val trfValueScaleReference =
-                    trfValueScaleObjects.find { it.keyType.lowercase() == "inscalecomponent" }
-                trfValueScaleReference?.let { trfValueScaleRef ->
-                    val scaleComponentClass =
-                        jsonConfigFile.objects.find { it.code == trfValueScaleRef.codeRef }!!
+            val trfValueScaleReference =
+                trfValueScaleObjects.find { it.keyType == "InScaleComponent" }
+            trfValueScaleReference?.let { trfValueScaleRef ->
+                val scaleComponentClass =
+                    jsonConfigFile.objects.find { it.code == trfValueScaleRef.codeRef }!!
 
-                    val scaleComponentId =
-                        tblFieldsOneObj.find { it.fieldName == trfValueScaleRef.refField }!!.fieldValue
+                val scaleComponentId =
+                    tblFieldsOneObj.find { it.fieldName == trfValueScaleRef.refField }!!.fieldValue
 
-                    var filterObjCond = ""
-                    if (scaleComponentClass.filterObjects != "") {
-                        filterObjCond = " and ${scaleComponentClass.filterObjects} "
+                var filterObjCond = ""
+                if (scaleComponentClass.filterObjects != "") {
+                    filterObjCond = " and ${scaleComponentClass.filterObjects} "
+                }
+                var sqlQuery = "select * from  ${scaleComponentClass.tableName} " +
+                        " where audit_state = 'A' and ${scaleComponentClass.keyFieldIn} = $scaleComponentId " +
+                        filterObjCond +
+                        " order by id "
+
+                val lstKeyFieldInValue =
+                    getOneFieldFromRefField(tblFieldsOneObj, oneConfigClass, oneConfigClass.keyFieldIn)
+                val lstKeyFieldOutValue = listOf<Fields>()
+                val taskObject =
+                    TaskFileFields(oneConfigClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
+                if (objectEvent == "Read") {
+                    taskFileFields = mutableListOf<TaskFileFields>()
+                    readOneObject(taskObject, scaleComponentClass, jsonConfigFile, false, sqlQuery)
+                } else if (objectEvent == "Load") {
+
+                    // проверка scaleObjects
+                    // для объектов класса scaleComponent не нужна проверка. там нет значимых полей
+                    val isAddScaleObjects =
+                        compareScaleObjects(
+                            sqlQuery,
+                            scaleComponentClass,
+                            scaleObjects,
+                            oneConfigClass,
+                            tblFieldsOneObj
+                        )
+                    if (!isAddScaleObjects) {
+                        return false
                     }
-                    var sqlQuery = "select * from  ${scaleComponentClass.tableName} " +
-                            " where audit_state = 'A' and ${scaleComponentClass.keyFieldIn} = $scaleComponentId " +
-                            filterObjCond +
-                            " order by id "
+                }
 
-                    val lstKeyFieldInValue =
-                        getOneFieldFromRefField(tblFieldsOneObj, oneConfigClass, oneConfigClass.keyFieldIn)
-                    val lstKeyFieldOutValue = listOf<Fields>()
-                    val taskObject =
-                        TaskFileFields(oneConfigClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
-                    if (objectEvent == "Read") {
-                        taskFileFields = mutableListOf<TaskFileFields>()
-                        readOneObject(taskObject, scaleComponentClass, jsonConfigFile, false, sqlQuery)
-                    } else if (objectEvent == "Load") {
+                // выгрузка объектов scaleComponentValue. Ссылка по референсу с keyType=InScaleСomponentValue из класса scaleComponent
+                scaleComponentClass.scale?.let { scaleComponentScaleObjects ->
+                    val scaleComponentReference =
+                        scaleComponentScaleObjects.find { it.keyType == "InScaleComponentValue" }
+                    scaleComponentReference?.let { scaleComponentRef ->
+                        val scaleComponentValueClass =
+                            jsonConfigFile.objects.find { it.code == scaleComponentRef.codeRef }!!
 
-                        // проверка scaleObjects
-                        // для объектов класса scaleComponent не нужна проверка. там нет значимых полей
-                        val isAddScaleObjects =
-                            compareScaleObjects(
-                                sqlQuery,
-                                scaleComponentClass,
-                                scaleObjects,
-                                oneConfigClass,
-                                tblFieldsOneObj
-                            )
-                        if (!isAddScaleObjects) {
-                            return false
+                        filterObjCond = ""
+                        if (scaleComponentValueClass.filterObjects != "") {
+                            filterObjCond = " and ${scaleComponentValueClass.filterObjects} "
                         }
-                    }
+                        sqlQuery = " select * from  ${scaleComponentValueClass.tableName} " +
+                                " where audit_state = 'A' and ${scaleComponentRef.refField} = $scaleComponentId " +
+                                filterObjCond +
+                                " order by id "
 
-                    // выгрузка объектов scaleComponentValue. Ссылка по референсу с keyType=InScaleСomponentValue из класса scaleComponent
-                    scaleComponentClass.scale?.let { scaleComponentScaleObjects ->
-                        val scaleComponentReference =
-                            scaleComponentScaleObjects.find { it.keyType.lowercase() == "inscalecomponentvalue" }
-                        scaleComponentReference?.let { scaleComponentRef ->
-                            val scaleComponentValueClass =
-                                jsonConfigFile.objects.find { it.code == scaleComponentRef.codeRef }!!
+                        if (objectEvent == "Read") {
+                            taskFileFields = mutableListOf<TaskFileFields>()
+                            readOneObject(taskObject, scaleComponentValueClass, jsonConfigFile, false, sqlQuery)
+                        } else if (objectEvent == "Load") {
 
-                            filterObjCond = ""
-                            if (scaleComponentValueClass.filterObjects != "") {
-                                filterObjCond = " and ${scaleComponentValueClass.filterObjects} "
+                            // проверка scaleObjects
+                            val isAddScaleObjects =
+                                compareScaleObjects(
+                                    sqlQuery,
+                                    scaleComponentValueClass,
+                                    scaleObjects,
+                                    oneConfigClass,
+                                    tblFieldsOneObj
+                                )
+                            if (!isAddScaleObjects) {
+                                return false
                             }
-                            sqlQuery = " select * from  ${scaleComponentValueClass.tableName} " +
-                                    " where audit_state = 'A' and ${scaleComponentRef.refField} = $scaleComponentId " +
-                                    filterObjCond +
-                                    " order by id "
+                        }
+                        // выгрузка объектов scalableAmount. Ссылка по референсу с keyType=InScalableAmount из класса scaleComponentValue
+                        scaleComponentValueClass.scale?.let { scaleComponentValueScaleObjects ->
+                            val scaleAmountReference =
+                                scaleComponentValueScaleObjects.find { it.keyType == "InScalableAmount" }
+                            scaleAmountReference?.let { scaleAmountRef ->
+                                val scaleAmountClass =
+                                    jsonConfigFile.objects.find { it.code == scaleAmountRef.codeRef }!!
 
-                            if (objectEvent == "Read") {
-                                taskFileFields = mutableListOf<TaskFileFields>()
-                                readOneObject(taskObject, scaleComponentValueClass, jsonConfigFile, false, sqlQuery)
-                            } else if (objectEvent == "Load") {
-
-                                // проверка scaleObjects
-                                val isAddScaleObjects =
-                                    compareScaleObjects(
-                                        sqlQuery,
-                                        scaleComponentValueClass,
-                                        scaleObjects,
-                                        oneConfigClass,
-                                        tblFieldsOneObj
-                                    )
-                                if (!isAddScaleObjects) {
-                                    return false
+                                filterObjCond = ""
+                                if (scaleAmountClass.filterObjects != "") {
+                                    filterObjCond = " and ${scaleAmountClass.filterObjects} "
                                 }
-                            }
-                            // выгрузка объектов scalableAmount. Ссылка по референсу с keyType=InScalableAmount из класса scaleComponentValue
-                            scaleComponentValueClass.scale?.let { scaleComponentValueScaleObjects ->
-                                val scaleAmountReference =
-                                    scaleComponentValueScaleObjects.find { it.keyType.lowercase() == "inscalableamount" }
-                                scaleAmountReference?.let { scaleAmountRef ->
-                                    val scaleAmountClass =
-                                        jsonConfigFile.objects.find { it.code == scaleAmountRef.codeRef }!!
+                                sqlQuery = " select distinct sc_amount.* " +
+                                        " from  ${scaleComponentValueClass.tableName} sc_comp " +
+                                        " join ${scaleAmountClass.tableName} sc_amount on sc_amount.${scaleAmountClass.keyFieldIn} = sc_comp.${scaleAmountRef.refField} " +
+                                        " where sc_amount.audit_state = 'A' and sc_comp.${scaleComponentRef.refField} = $scaleComponentId " +
+                                        filterObjCond +
+                                        " order by sc_amount.id "
 
-                                    filterObjCond = ""
-                                    if (scaleAmountClass.filterObjects != "") {
-                                        filterObjCond = " and ${scaleAmountClass.filterObjects} "
-                                    }
-                                    sqlQuery = " select distinct sc_amount.* " +
-                                            " from  ${scaleComponentValueClass.tableName} sc_comp " +
-                                            " join ${scaleAmountClass.tableName} sc_amount on sc_amount.${scaleAmountClass.keyFieldIn} = sc_comp.${scaleAmountRef.refField} " +
-                                            " where sc_amount.audit_state = 'A' and sc_comp.${scaleComponentRef.refField} = $scaleComponentId " +
-                                            filterObjCond +
-                                            " order by sc_amount.id "
+                                if (objectEvent == "Read") {
+                                    taskFileFields = mutableListOf<TaskFileFields>()
+                                    readOneObject(taskObject, scaleAmountClass, jsonConfigFile, false, sqlQuery)
+                                } else if (objectEvent == "Load") {
 
-                                    if (objectEvent == "Read") {
-                                        taskFileFields = mutableListOf<TaskFileFields>()
-                                        readOneObject(taskObject, scaleAmountClass, jsonConfigFile, false, sqlQuery)
-                                    } else if (objectEvent == "Load") {
-
-                                        // проверка scaleObjects
-                                        val isAddScaleObjects =
-                                            compareScaleObjects(
-                                                sqlQuery,
-                                                scaleAmountClass,
-                                                scaleObjects,
-                                                oneConfigClass,
-                                                tblFieldsOneObj
-                                            )
-                                        if (!isAddScaleObjects) {
-                                            return false
-                                        }
+                                    // проверка scaleObjects
+                                    val isAddScaleObjects =
+                                        compareScaleObjects(
+                                            sqlQuery,
+                                            scaleAmountClass,
+                                            scaleObjects,
+                                            oneConfigClass,
+                                            tblFieldsOneObj
+                                        )
+                                    if (!isAddScaleObjects) {
+                                        return false
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
             //}
         }
         return true
@@ -1311,7 +1320,7 @@ class ReaderDB {
         val scaleObjectFieldsFromDB = mutableListOf<List<Fields>>()
         var scaleOneObjectFieldsFromDB = mutableListOf<Fields>()
 
-        var iRowCount = 0 // кол-во записей класса scaleClass в БД
+        var iRowCount = 0 // кол-во записей класса scaleConfigClass в БД
         val connCompare = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
         logger.debug(
             CommonFunctions().createObjectIdForLogMsg(
@@ -1321,6 +1330,11 @@ class ReaderDB {
                 -1
             ) + "Query to scaleObjects <${scaleClass.code}> : $sqlQuery"
         )
+
+        val scaleIdFieldName = scalable.getScaleIdFieldName(scaleClass)
+        val scaleAmountClassName = scalable.scalableAmountClassName
+        val scaleCompFieldName = scalable.scaleComponentValueFieldName
+
         val queryStatement = connCompare.prepareStatement(sqlQuery)
         val queryResult = queryStatement.executeQuery()
         while (queryResult.next()) {
@@ -1335,7 +1349,9 @@ class ReaderDB {
                 // для объектов scalableamount проверяю на совпадение кроме прочего еще и значение поля scale_id
                 if (scaleClass.fieldsNotExport.find { it.name == fieldName } == null &&
                     ((scaleClass.scale!!.find { it.refField == fieldName } == null) ||
-                            ((fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME) && scaleClass.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME))
+                            //((fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME) && scaleClass.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME))
+                            ((fieldName.lowercase() == scaleIdFieldName) && scaleClass.code.lowercase() == scaleAmountClassName))
+
                 ) {
                     scaleOneObjectFieldsFromDB.add(Fields(fieldName, fieldValue))
                 }
@@ -1362,8 +1378,10 @@ class ReaderDB {
 
                     // значение каждого поля из файла сравниваю со значением такого же поля из БД
                     if (fieldNameFromFile != scaleClass.keyFieldIn &&
+                        fieldNameFromFile.lowercase() != scaleCompFieldName &&
                         ((scaleClass.scale!!.find { it.refField == fieldNameFromFile } == null)
-                                || (fieldNameFromFile.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME) && scaleClass.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME) &&
+                                //|| (fieldNameFromFile.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME) && scaleClass.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME) &&
+                                || (fieldNameFromFile.lowercase() == scaleIdFieldName) && scaleClass.code.lowercase() == scaleAmountClassName) &&
                         fieldsFromDB.find { it.fieldName == fieldNameFromFile }!!.fieldValue != fieldValueFromFile
                     ) {
                         if (scaleObjectFromId == "") {
@@ -1401,6 +1419,7 @@ class ReaderDB {
             return false
         }
 
+        // каждую запись из БД сравниваю с записью из файла
         isRowEqual = true
         scaleObjectFromId = ""
         // цикл по объектам БД
@@ -1414,8 +1433,10 @@ class ReaderDB {
 
                     // значение каждого поля из БД сравниваю со значением такого же поля из файла
                     if (fieldNameFromDB != scaleClass.keyFieldIn &&
+                        fieldNameFromDB.lowercase() != scaleCompFieldName &&
                         ((scaleClass.scale!!.find { it.refField == fieldNameFromDB } == null)
-                                || (fieldNameFromDB.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME) && scaleClass.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME) &&
+                                //|| (fieldNameFromDB.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME) && scaleClass.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME) &&
+                                || (fieldNameFromDB.lowercase() == scaleIdFieldName) && scaleClass.code.lowercase() == scaleAmountClassName) &&
                         oneScaleObject.row.fields.find { it.fieldName == fieldNameFromDB }!!.fieldValue != fieldValueFromDB
                     ) {
                         if (scaleObjectFromId == "") {

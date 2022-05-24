@@ -24,15 +24,15 @@ class CommonConstants {
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2
 
-    val SCALE_ID_FIELD_NAME = "scale_id"
-    val SCALE_COMPONENT_ID_FIELD_NAME = "scale_component_id"
-    val TARIFF_CLASS_NAME = "tariff"
-    val TARIFF_VALUE_CLASS_NAME = "tariffvalue"
-    val NUMBER_TARIFF_VALUE_CLASS_NAME = "numbertariffvalue"
-    val SCALE_COMPONENT_CLASS_NAME = "scalecomponent"
-    val SCALE_COMPONENT_VALUE_CLASS_NAME = "scalecomponentvalue"
-    val SCALE_AMOUNT_CLASS_NAME = "scalableamount"
-    val SCALE_CLASS_NAME = "scale"
+    //val SCALE_ID_FIELD_NAME = "scale_id"
+    //val SCALE_COMPONENT_ID_FIELD_NAME = "scale_component_id"
+    //val TARIFF_CLASS_NAME = "tariff"
+    //val TARIFF_VALUE_CLASS_NAME = "tariffvalue"
+    //val NUMBER_TARIFF_VALUE_CLASS_NAME = "numbertariffvalue"
+    //val SCALE_COMPONENT_CLASS_NAME = "scalecomponent"
+    //val SCALE_COMPONENT_VALUE_CLASS_NAME = "scalecomponentvalue"
+    //val SCALE_AMOUNT_CLASS_NAME = "scalableamount"
+    //val SCALE_CLASS_NAME = "scale"
 
     // массив полей, которые не выгружаются из БД
     val FIELDS_NOT_EXPORT = arrayOf(
