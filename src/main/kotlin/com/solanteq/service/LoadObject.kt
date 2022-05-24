@@ -542,8 +542,8 @@ class LoadObject {
             }
             val sqlQuery = "select * " +
                     "from ${oneLinkObjClass.tableName} " +
-                    "where audit_state = 'A' and ${oneLinkObjDescription.refField} = $idObjectInDB $filterObjCond " +
-                    "and (valid_to is null or valid_to >= CURRENT_DATE)"
+                    "where audit_state = 'A' and ${oneLinkObjDescription.refField} = $idObjectInDB $filterObjCond "
+                    //"and (valid_to is null or valid_to >= CURRENT_DATE)"
 
             logger.debug(
                 CommonFunctions().createObjectIdForLogMsg(

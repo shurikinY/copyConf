@@ -33,7 +33,7 @@ class Scalable(jsonConfigFile: RootCfg) {
         scalableAmountFieldName = this.getScaleFieldNameByKeyType("InScalableAmount")
 
         scaleComponentClassName = this.getScaleComponentConfigClassName()
-        scaleComponentValueClassName= this.getScaleComponentValueConfigClassName()
+        scaleComponentValueClassName = this.getScaleComponentValueConfigClassName()
         scalableAmountClassName = this.getScalableAmountConfigClassName()
     }
 
@@ -183,17 +183,18 @@ class Scalable(jsonConfigFile: RootCfg) {
 
         // ищу класс(scaleComponent), описывающий компонент шкалы тарифа в файле конфигурации
         val scaleComponentConfigClassName = this.getScaleComponentConfigClassName()
-        val scaleComponentConfigClass = this.getClassDescriptionByCode(scaleComponentConfigClassName)
+        if (scaleComponentConfigClassName != "") {
+            val scaleComponentConfigClass = this.getClassDescriptionByCode(scaleComponentConfigClassName)
 
-        // в классе, описывающем компонент шкалы тарифа, ищу ссылку на класс, описывающий связь компонента шкалы тарифа и измеряемой величины тарифа
-        scaleComponentValueConfigClassName =
-            scaleComponentConfigClass.scale?.find { it.keyType == "InScaleComponentValue" }?.codeRef ?: ""
+            // в классе, описывающем компонент шкалы тарифа, ищу ссылку на класс, описывающий связь компонента шкалы тарифа и измеряемой величины тарифа
+            scaleComponentValueConfigClassName =
+                scaleComponentConfigClass.scale?.find { it.keyType == "InScaleComponentValue" }?.codeRef ?: ""
 
-        // Описание класса шкалы из файла конфигурации.
-        if (scaleComponentValueConfigClassName != "") {
-            scaleComponentValueConfigClass = getClassDescriptionByCode(scaleComponentValueConfigClassName)
+            // Описание класса шкалы из файла конфигурации.
+            if (scaleComponentValueConfigClassName != "") {
+                scaleComponentValueConfigClass = getClassDescriptionByCode(scaleComponentValueConfigClassName)
+            }
         }
-
         return if (scaleComponentValueConfigClass == null)
             ""
         else
@@ -210,15 +211,17 @@ class Scalable(jsonConfigFile: RootCfg) {
 
         // ищу класс(scaleComponent), описывающий компонент шкалы тарифа в файле конфигурации
         val scaleComponentValueConfigClassName = this.getScaleComponentValueConfigClassName()
-        val scaleComponentValueConfigClass = this.getClassDescriptionByCode(scaleComponentValueConfigClassName)
+        if (scaleComponentValueConfigClassName != "") {
+            val scaleComponentValueConfigClass = this.getClassDescriptionByCode(scaleComponentValueConfigClassName)
 
-        // в классе, описывающем компонент шкалы тарифа, ищу ссылку на класс, описывающий связь компонента шкалы тарифа и измеряемой величины тарифа
-        scalableAmountConfigClassName =
-            scaleComponentValueConfigClass.scale?.find { it.keyType == "InScalableAmount" }?.codeRef ?: ""
+            // в классе, описывающем компонент шкалы тарифа, ищу ссылку на класс, описывающий связь компонента шкалы тарифа и измеряемой величины тарифа
+            scalableAmountConfigClassName =
+                scaleComponentValueConfigClass.scale?.find { it.keyType == "InScalableAmount" }?.codeRef ?: ""
 
-        // Описание класса шкалы из файла конфигурации.
-        if (scalableAmountConfigClassName != "") {
-            scalableAmountConfigClass = getClassDescriptionByCode(scalableAmountConfigClassName)
+            // Описание класса шкалы из файла конфигурации.
+            if (scalableAmountConfigClassName != "") {
+                scalableAmountConfigClass = getClassDescriptionByCode(scalableAmountConfigClassName)
+            }
         }
 
         return if (scalableAmountConfigClass == null)
@@ -229,7 +232,7 @@ class Scalable(jsonConfigFile: RootCfg) {
 
     // Поиск названия поля по ключу "keyType" из ссылки в структуре scale
     // Если поле не найдено, то вернет ""
-    private fun getScaleFieldNameByKeyType(keyType : String): String {
+    private fun getScaleFieldNameByKeyType(keyType: String): String {
 
         var scaleComponentIdFieldName: String? = ""
 
