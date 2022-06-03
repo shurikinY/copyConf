@@ -21,7 +21,7 @@ public var TASK_FILE = ""
 public var OBJECT_FILE = ""
 public var FILTER_FILE = ""
 public var AUDIT_DATE = ""
-private val LOGBACK_FILE_PATH = "resources\\config\\logback.xml"
+private val LOGBACK_FILE_PATH = "config\\logback.xml"
 
 // Класс описывает действия с объектом при проверке/загрузке
 data class ActionWithObject(
