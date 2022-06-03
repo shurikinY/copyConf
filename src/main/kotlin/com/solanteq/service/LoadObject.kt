@@ -21,27 +21,46 @@ data class ScaleAmountInDB(
     var newId: String
 )
 
-class LoadObject {
+//class LoadObject(allLoadObjectMain: DataDBMain) {
+object LoadObject {
+
+    //private val allLoadObject = allLoadObjectMain
+    public lateinit var allLoadObject: DataDBMain
+
+    // действие при загрузке для каждого объекта из файла: добавление/обновление/пропуск
+    public lateinit var listOfActionWithObject: MutableList<ActionWithObject>
+
+    // коннект к БД
+    public lateinit var conn: Connection
+
+    /*// Объект из файла:
+    // 0 - полностью совпадает с объектом из БД
+    // 1 - подлежит замене в БД
+    // 2 - добавлен в БД
+    val OBJECT_TO_SKIP = 0
+    val OBJECT_TO_UPDATE = 1
+    val OBJECT_TO_INSERT = 2*/
 
     // считывание конфигурации
     private val readJsonFile = ReadJsonFile()
     private val jsonConfigFile = readJsonFile.readConfig()
 
-    var scalable = Scalable(jsonConfigFile)
+    private val scalable = Scalable(jsonConfigFile)
 
-    var readerDB = ReaderDB()
+    private val readerDB = ReaderDB()
 
+    //private val checkObject = CheckObject(allLoadObject)
+    private val checkObject = CheckObject
+
+    private val createReport = CreateReport()
+
+    // список найденных объектов файла в БД приемнике
     private var dataObjectDestList = mutableListOf<DataObjectDest>()
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    // коннект к БД
-    private lateinit var conn: Connection
-
     private var listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
-    // ScaleAmountInDB(listOf<Fields>(),"")
 
-    //fun loadDataObject(allLoadObject: DataDBMain, jsonConfigFile: RootCfg) {
     fun loadDataObject() {
 
         // считывание конфигурации
@@ -53,19 +72,19 @@ class LoadObject {
         CommonFunctions().createListFieldsNotExport(jsonConfigFile)
 
         // считывание файла объектов
-        val allLoadObject = readJsonFile.readObject()
+        //val allLoadObject = readJsonFile.readObject()
 
         // проверка версии и названия конфигурационного файла и файла с объектами
         if (jsonConfigFile.cfgList[0].version != allLoadObject.cfgList[0].version ||
             jsonConfigFile.cfgList[0].cfgName != allLoadObject.cfgList[0].cfgName
         ) {
             logger.error("Different versions or cfgName of Configuration File and Object File.")
-            exitProcess(-1)
+            //exitProcess(-1)
+            exitFromProgram()
         }
 
         // установка соединения с БД
-        conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-        //logger.info("DataBase connection parameters: dbconn=$CONN_STRING dbuser=$CONN_LOGIN dbpass=$CONN_PASS.")
+        //conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
 
         // цикл по главным объектам (главные объекты это объекты, которые нужно загрузить в БД).
         // если главный объект успешно загружен, то добавляю в список его полей Fields("@isLoad","1")
@@ -74,11 +93,17 @@ class LoadObject {
             // поиск описания класса референсного объекта в файле конфигурации
             val oneConfLoadObj = jsonConfigFile.objects.find { it.code == oneLoadObject.code }!!
             val chainLoadObject = mutableListOf<DataDB>(oneLoadObject)
-            loadOneObject(chainLoadObject, oneConfLoadObj, jsonConfigFile, allLoadObject.element)
+            loadOneObject(
+                chainLoadObject,
+                oneConfLoadObj,
+                jsonConfigFile,
+                allLoadObject.element
+            )
         }
         createQueryForFamilyObject(allLoadObject, jsonConfigFile)
-        conn.close()
+        //conn.close()
 
+        createReport.writeReportOfProgramExecution("load")
     }
 
     private fun loadOneObject(
@@ -100,7 +125,8 @@ class LoadObject {
             // поиск референсного объекта среди главных объектов.
             // если indexInAllLoadObject > -1, то референсный объект найден среди главных
             val indexInAllLoadObject =
-                CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
+                //CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
+                checkObject.findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
 
             // нашли референсный объект среди главных объектов. теперь проверка референсов найденного главного объекта
             if (indexInAllLoadObject > -1) {
@@ -113,7 +139,12 @@ class LoadObject {
                 chainLoadObject.add(allLoadObject[indexInAllLoadObject])
 
                 // рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
-                loadOneObject(chainLoadObject, oneConfClassRefObj, jsonConfigFile, allLoadObject)
+                loadOneObject(
+                    chainLoadObject,
+                    oneConfClassRefObj,
+                    jsonConfigFile,
+                    allLoadObject
+                )
             }
         }
 
@@ -127,7 +158,8 @@ class LoadObject {
                 // поиск референсного объекта среди главных объектов.
                 // если indexInAllLoadObject > -1, то референсный объект найден среди главных
                 val indexInAllLoadObject =
-                    CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
+                    //CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
+                    checkObject.findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
 
                 // нашли референсный объект среди главных объектов. теперь проверка референсов найденного главного объекта
                 if (indexInAllLoadObject > -1) {
@@ -135,7 +167,12 @@ class LoadObject {
                     chainLoadObject.add(allLoadObject[indexInAllLoadObject])
 
                     // рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
-                    loadOneObject(chainLoadObject, oneConfClassRefObj, jsonConfigFile, allLoadObject)
+                    loadOneObject(
+                        chainLoadObject,
+                        oneConfClassRefObj,
+                        jsonConfigFile,
+                        allLoadObject
+                    )
                 }
             }
             for (oneScaleObject in oneLoadObject.row.scaleObjects) {
@@ -146,7 +183,8 @@ class LoadObject {
                     // поиск референсного объекта среди главных объектов.
                     // если indexInAllLoadObject > -1, то референсный объект найден среди главных
                     val indexInAllLoadObject =
-                        CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
+                        //CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
+                        checkObject.findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
 
                     // нашли референсный объект среди главных объектов. теперь проверка референсов найденного главного объекта
                     if (indexInAllLoadObject > -1) {
@@ -154,7 +192,12 @@ class LoadObject {
                         chainLoadObject.add(allLoadObject[indexInAllLoadObject])
 
                         // рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
-                        loadOneObject(chainLoadObject, oneConfClassRefObj, jsonConfigFile, allLoadObject)
+                        loadOneObject(
+                            chainLoadObject,
+                            oneConfClassRefObj,
+                            jsonConfigFile,
+                            allLoadObject
+                        )
                     }
                 }
             }
@@ -180,14 +223,14 @@ class LoadObject {
         // формирование запроса для изменения данных в базе
         createSaveObjSql(oneLoadObject, oneConfClassObj, allLoadObject, jsonConfigFile)
 
-        logger.debug(
+        /*logger.debug(
             CommonFunctions().createObjectIdForLogMsg(
                 oneConfClassObj.code,
                 oneConfClassObj.keyFieldOut,
                 oneLoadObject.row.fields,
                 -1
             ) + "The object is loaded into the database. "
-        )
+        )*/
         oneLoadObject.row.fields += Fields("@isLoad", "1")
     }
 
@@ -201,24 +244,80 @@ class LoadObject {
 
         listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
 
-        val sqlQueryUpdate: String
-        val sqlQueryInsertAud: String
-        val sqlQueryRefTables: String
-        val sqlQueryInsert: String
+        //val sqlQueryUpdate: String = ""
+        //val sqlQueryInsert: String = ""
+        var sqlQueryObjMain: String = ""
+        //val sqlQueryInsertAud: String
+        var sqlQueryRefTables: String = ""
         val sqlQuery: String
         val nextValueRevName = "nextValueRev"
         var sqlQueryInsertScale = ""
 
-        var sqlQueryLinkObjDeclare = ""
-        var sqlQueryLinkObjInit = ""
+        var sqlQueryObjDeclare = ""
+        var sqlQueryObjInit = ""
         var sqlQueryLinkObject = ""
+
+        val actionWithObject =
+            listOfActionWithObject.find { it.classCode == oneLoadObject.code && it.id == oneLoadObject.row.fields.find { fields -> fields.fieldName == oneConfClassObj.keyFieldIn }!!.fieldValue!! }
 
         // получаю идентификатор объекта в базе приемнике, либо генерю новый
         val idObjectInDB = getObjIdInDB(oneLoadObject.row.fields, oneConfClassObj, 0, true)
 
-        // получаю идентификатор шкалы
+        // если у класса есть шкала, то работаем с ней
+        if (scalable.isClassHaveScale(oneConfClassObj)) {
+
+            // идентификатор шкалы в файле
+            var idScaleInFile = ""
+
+            // идентификатор шкалы в БД
+            val idScaleInDB = findScaleIdInDB(oneConfClassObj, idObjectInDB)
+
+            // добавляю новую шкалу в базу
+            if (idScaleInDB == "" && isScaleExistsInfile(oneLoadObject)) {
+
+                // ид шкалы в файле уже изменен на нужный. Получаю его
+                idScaleInFile =
+                    oneLoadObject.row.fields.find { it.fieldName == scalable.getScaleIdFieldName(oneLoadObject) }!!.fieldValue!!
+
+                // проверка есть в CheckObject "There is no description of scale class in configuration file", поэтому здесь не упадет
+                val scaleClass = scalable.getScaleConfigClassDescription()!!
+
+                val oneScaleObject = DataDB(
+                    scalable.getClassNameByScaleKeyType("InScale"),
+                    oneLoadObject.loadMode,
+                    Row(listOf<Fields>(), listOf<RefObject>(), listOf<DataDB>(), listOf<DataDB>())
+                )
+                sqlQueryInsertScale += "\n" +
+                        createMainInsUpdQuery(
+                            oneScaleObject,
+                            scaleClass,
+                            idScaleInFile,
+                            "",
+                            "insert"
+                        )
+
+                val nextValueRevScaleName = "nextValueRevScaleId"
+
+                // объявление переменных для значений сиквенса в psql
+                sqlQueryObjDeclare += "declare $nextValueRevScaleName integer; \n"
+                // инициализация переменных для сиквенса в psql
+                sqlQueryObjInit += "$nextValueRevScaleName=nextval('${CommonConstants().commonSequence}'); \n"
+
+                // insert в таблицу аудита новой записи
+                sqlQueryInsertScale +=
+                    createMainInsUpdQuery(
+                        oneScaleObject,
+                        scaleClass,
+                        idScaleInFile,
+                        nextValueRevScaleName,
+                        "insertAudValues"
+                    ) + "\n"
+            }
+        }
+
+
+        /*// идентификатор шкалы
         var idScaleInDB = ""
-        //if (oneConfClassObj.code.lowercase() == CommonConstants().TARIFF_CLASS_NAME) {
 
         // если у класса есть шкала, то работаем с ней
         if (scalable.isClassHaveScale(oneConfClassObj)) {
@@ -234,10 +333,8 @@ class LoadObject {
 
                 // шкала есть в тарифе в БД приемнике или в тарифе в файле
                 if (idScaleInDB != "") {
-                    // добавляю новую шкалу в базу
 
-                    //val scaleConfigClass =
-                    //    jsonConfigFile.objects.find { it.code.lowercase() == CommonConstants().SCALE_CLASS_NAME }!!
+                    // добавляю новую шкалу в базу
 
                     // проверка есть в CheckObject "There is no description of scale class in configuration file", поэтому здесь не упадет
                     val scaleClass = scalable.getScaleConfigClassDescription()!!
@@ -259,9 +356,9 @@ class LoadObject {
                     val nextValueRevScaleName = "nextValueRevScaleId"
 
                     // объявление переменных для значений сиквенса в psql
-                    sqlQueryLinkObjDeclare += "declare $nextValueRevScaleName integer; \n"
+                    sqlQueryObjDeclare += "declare $nextValueRevScaleName integer; \n"
                     // инициализация переменных для сиквенса в psql
-                    sqlQueryLinkObjInit += "$nextValueRevScaleName=nextval('${CommonConstants().commonSequence}'); \n"
+                    sqlQueryObjInit += "$nextValueRevScaleName=nextval('${CommonConstants().commonSequence}'); \n"
 
                     // insert в таблицу аудита новой записи
                     sqlQueryInsertScale +=
@@ -272,8 +369,6 @@ class LoadObject {
                             nextValueRevScaleName,
                             "insertAudValues"
                         ) + "\n"
-
-                    //setNewIdScale(oneLoadObject, idScaleInDB)
                 }
             }
 
@@ -282,9 +377,10 @@ class LoadObject {
                 setNewIdScale(oneLoadObject, idScaleInDB)
             }
 
-        }
+        }*/
 
-        // установка нового значения ссылочного поля в файле для референса типа fieldJson
+
+        /*// установка нового значения ссылочного поля в файле для референса типа fieldJson
         setNewIdFieldJson(oneLoadObject.row.fields, oneLoadObject.row.refObject, oneConfClassObj, jsonConfigFile)
         for (oneLinkObject in oneLoadObject.row.linkObjects) {
             var oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneLinkObject.code }!!
@@ -323,61 +419,139 @@ class LoadObject {
             }
         }
 
-        // формирование условий запроса update/insert
-        sqlQueryUpdate = createMainInsUpdQuery(oneLoadObject, oneConfClassObj, idObjectInDB, "", "update")
-        sqlQueryInsert = createMainInsUpdQuery(oneLoadObject, oneConfClassObj, idObjectInDB, "", "insert")
+        // Возвращает действие, которое необходимо выполнить с объектом: OBJECT_TO_SKIP, OBJECT_TO_UPDATE, OBJECT_TO_INSERT
+        val actionWithMainObject = actionWithObjectFromFile(oneLoadObject.row.fields, oneConfClassObj, idObjectInDB)
 
-        // формирование условий запроса insert в таблицу аудита
-        sqlQueryInsertAud =
-            createMainInsUpdQuery(oneLoadObject, oneConfClassObj, idObjectInDB, nextValueRevName, "insertAudValues")
+        // формирование условий запроса update/insert главного объекта
+        if (actionWithMainObject != OBJECT_TO_SKIP) {
 
-        // формирование условий запроса для таблицы связей (референсы refTables)
-        sqlQueryRefTables =
-            createRefTablesQuery(
-                oneLoadObject,
-                oneConfClassObj,
-                allLoadObject,
-                jsonConfigFile,
-                idObjectInDB,
-                "mainObject"
-            )
+            if (actionWithMainObject == OBJECT_TO_UPDATE) {
+                sqlQueryObjMain = createMainInsUpdQuery(oneLoadObject, oneConfClassObj, idObjectInDB, "", "update")
+            } else if (actionWithMainObject == OBJECT_TO_INSERT) {
+                sqlQueryObjMain = createMainInsUpdQuery(oneLoadObject, oneConfClassObj, idObjectInDB, "", "insert")
+            }
 
-        // запрос на изменение объектов linkObjects
-        //val (sqlQueryLinkObjDeclare, sqlQueryLinkObjInit, sqlQueryLinkObject) =
-        val listQueryCondition =
-            createLinkObjectsQuery(
-                oneLoadObject,
-                oneConfClassObj,
-                jsonConfigFile,
-                idObjectInDB
-            )
-        sqlQueryLinkObjDeclare += listQueryCondition[0]
-        sqlQueryLinkObjInit += listQueryCondition[1]
-        sqlQueryLinkObject += listQueryCondition[2]
+            sqlQueryObjDeclare += "declare $nextValueRevName integer; \n"
+            sqlQueryObjInit += "$nextValueRevName = nextval('${CommonConstants().commonSequence}'); \n"
 
-        // запрос на изменение основного объекта, его refTables и linkObjects
-        sqlQuery = "\nDO $$ \n" +
-                "declare $nextValueRevName integer; \n" +
-                "declare revTimeStamp numeric(18,0); \n" +
-                "declare dateNow timestamp; \n" +
-                sqlQueryLinkObjDeclare +
-                "BEGIN \n" +
-                "$nextValueRevName = nextval('${CommonConstants().commonSequence}'); \n" +
-                "dateNow = now(); \n" +
-                "revTimeStamp = cast(extract(epoch from dateNow) * 1000 as numeric(18,0)); \n" +
-                sqlQueryLinkObjInit +
-                sqlQueryInsertScale +
-                "if exists(select 1 from ${oneConfClassObj.tableName} where ${oneConfClassObj.keyFieldIn}='$idObjectInDB') then \n" +
-                sqlQueryUpdate +
-                "else \n" +
-                sqlQueryInsert +
-                "end if; \n" +
-                sqlQueryInsertAud +
-                sqlQueryRefTables +
-                sqlQueryLinkObject +
-                "END $$; \n"
+            // формирование условий запроса insert в таблицу аудита главного объекта
+            sqlQueryObjMain +=
+                createMainInsUpdQuery(oneLoadObject, oneConfClassObj, idObjectInDB, nextValueRevName, "insertAudValues")
 
-        createTranSaveObj(sqlQuery, oneLoadObject, oneConfClassObj)
+        }*/
+
+        // формирование условий запроса update/insert главного объекта
+        if (actionWithObject != null && !actionWithObject.actionSkip) {
+
+            // формирование запроса для добавления/обновления основного объекта
+            if (actionWithObject.actionUpdateMainRecord || actionWithObject.actionInsert) {
+
+                if (actionWithObject.actionUpdateMainRecord) {
+                    sqlQueryObjMain = createMainInsUpdQuery(oneLoadObject, oneConfClassObj, idObjectInDB, "", "update")
+                } else {
+                    sqlQueryObjMain = createMainInsUpdQuery(oneLoadObject, oneConfClassObj, idObjectInDB, "", "insert")
+                }
+
+                sqlQueryObjDeclare += "declare $nextValueRevName integer; \n"
+                sqlQueryObjInit += "$nextValueRevName = nextval('${CommonConstants().commonSequence}'); \n"
+
+                // формирование условий запроса insert в таблицу аудита главного объекта
+                sqlQueryObjMain +=
+                    createMainInsUpdQuery(
+                        oneLoadObject,
+                        oneConfClassObj,
+                        idObjectInDB,
+                        nextValueRevName,
+                        "insertAudValues"
+                    )
+            }
+
+            // формирование условий запроса для таблицы связей (референсы refTables)
+            if (actionWithObject.actionUpdateRefTables || actionWithObject.actionInsert) {
+                sqlQueryRefTables =
+                    createRefTablesQuery(
+                        oneLoadObject,
+                        oneConfClassObj,
+                        allLoadObject,
+                        jsonConfigFile,
+                        idObjectInDB,
+                        "mainObject"
+                    )
+            }
+
+            if (actionWithObject.actionUpdateLinkRecord || actionWithObject.actionInsert) {
+                // запрос на изменение объектов linkObjects
+                /*val listQueryCondition =
+                    createLinkObjectsQuery(
+                        oneLoadObject,
+                        oneConfClassObj,
+                        jsonConfigFile,
+                        idObjectInDB
+                    )
+                sqlQueryObjDeclare += listQueryCondition[0]
+                sqlQueryObjInit += listQueryCondition[1]
+                sqlQueryLinkObject += listQueryCondition[2]*/
+                sqlQueryObjDeclare += actionWithObject.queryToUpdateLinkRecDeclare
+                sqlQueryObjInit += actionWithObject.queryToUpdateLinkRecInit
+                sqlQueryLinkObject += actionWithObject.queryToUpdateLinkRecObject
+            }
+
+
+            // запрос на изменение основного объекта, его refTables и linkObjects
+            sqlQuery = "\nDO $$ \n" +
+                    "declare revTimeStamp numeric(18,0); \n" +
+                    "declare dateNow timestamp; \n" +
+                    sqlQueryObjDeclare +
+                    "BEGIN \n" +
+                    "dateNow = now(); \n" +
+                    "revTimeStamp = cast(extract(epoch from dateNow) * 1000 as numeric(18,0)); \n" +
+                    sqlQueryObjInit +
+                    sqlQueryInsertScale +
+                    sqlQueryObjMain +
+                    sqlQueryRefTables +
+                    sqlQueryLinkObject +
+                    "END $$; \n"
+
+            createTranSaveObj(sqlQuery, oneLoadObject, oneConfClassObj)
+            //if (sqlQueryObjMain != "" || sqlQueryRefTables != "" || sqlQueryLinkObject != "") {
+            //    createTranSaveObj(sqlQuery, oneLoadObject, oneConfClassObj)
+            //}
+        }
+
+        /*logger.info(
+            CommonFunctions().createObjectIdForLogMsg(
+                oneConfClassObj.code,
+                oneConfClassObj.keyFieldOut,
+                oneLoadObject.row.fields,
+                -1
+            ) + if (actionWithMainObject == OBJECT_TO_INSERT)
+                "The object has been inserted into the database. "
+            else if (actionWithMainObject == OBJECT_TO_UPDATE)
+                "The object has been updated in the database. "
+            // для случая, когда сам тариф не изменился, но изменились связанные с ним объекты
+            else if (actionWithMainObject == OBJECT_TO_SKIP && (sqlQueryRefTables != "" || sqlQueryLinkObject != ""))
+                "The object has been updated into the database. "
+            else
+                "The object has been skipped."
+        )*/
+
+        logger.info(
+            CommonFunctions().createObjectIdForLogMsg(
+                oneConfClassObj.code,
+                oneConfClassObj.keyFieldOut,
+                oneLoadObject.row.fields,
+                -1
+            ) + if (actionWithObject!!.actionInsert)
+                "The object has been inserted into the database. "
+            else if (actionWithObject.actionUpdateMainRecord || actionWithObject.actionUpdateRefTables || actionWithObject.actionUpdateLinkRecord)
+                "The object has been updated in the database. "
+            else
+                "The object has been skipped."
+        )
+
+        //createReportOfProgramExecution(oneConfClassObj.code, actionWithMainObject)
+        createReport.createReportOfProgramExecution(oneConfClassObj.code, actionWithObject)
+
     }
 
     // внести изменение в базу в рамках транзакции
@@ -391,7 +565,7 @@ class LoadObject {
             val connect = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
             connect.autoCommit = false
             val queryStatement = connect.prepareStatement(sqlQuery)
-            logger.debug(
+            logger.trace(
                 CommonFunctions().createObjectIdForLogMsg(
                     oneConfClassObj.code,
                     oneConfClassObj.keyFieldOut,
@@ -412,7 +586,8 @@ class LoadObject {
                     -1
                 ) + "\n" + "<The error with query>. " + e.message
             )
-            exitProcess(-1)
+            //exitProcess(-1)
+            exitFromProgram()
         }
     }
 
@@ -438,7 +613,8 @@ class LoadObject {
 
                 if (allLoadObject != null && typeLoadObject == "mainObject") {
                     val indexInAllCheckObject =
-                        CheckObject().findRefObjAmongMainObj(oneRefTables, oneRefLinkClass, allLoadObject)
+                        //CheckObject().findRefObjAmongMainObj(oneRefTables, oneRefLinkClass, allLoadObject)
+                        checkObject.findRefObjAmongMainObj(oneRefTables, oneRefLinkClass, allLoadObject)
                     if (indexInAllCheckObject > -1) {
 
                         val item = allLoadObject[indexInAllCheckObject]
@@ -466,7 +642,7 @@ class LoadObject {
     }
 
     // формирование условий запроса для референсов linkObjects
-    private fun createLinkObjectsQuery(
+    public fun createLinkObjectsQuery(
         oneLoadObject: DataDB,
         oneConfClassObj: ObjectCfg,
         jsonConfigFile: RootCfg,
@@ -535,78 +711,152 @@ class LoadObject {
             // список linkObjects из файла, для которых в приемнике нашелся точно такой же
             val listLinkObjNotToLoad = mutableListOf<String>()
 
-            //val sqlQuery = createQueryToCompareObjects(oneLinkObjClass, oneLinkObjDescription, idObjectInDB)
-            var filterObjCond = ""
-            if (oneLinkObjClass.filterObjects != "") {
-                filterObjCond += " and ${oneLinkObjClass.filterObjects} "
-            }
-            val sqlQuery = "select * " +
-                    "from ${oneLinkObjClass.tableName} " +
-                    "where audit_state = 'A' and ${oneLinkObjDescription.refField} = $idObjectInDB $filterObjCond "
-                    //"and (valid_to is null or valid_to >= CURRENT_DATE)"
+            if (idObjectInDB != "-") {
+                var filterObjCond = ""
+                if (oneLinkObjClass.filterObjects != "") {
+                    filterObjCond += " and ${oneLinkObjClass.filterObjects} "
+                }
+                val sqlQuery = "select * " +
+                        "from ${oneLinkObjClass.tableName} " +
+                        "where audit_state = 'A' and ${oneLinkObjDescription.refField} = $idObjectInDB $filterObjCond "
+                //"and (valid_to is null or valid_to >= CURRENT_DATE)"
 
-            logger.debug(
-                CommonFunctions().createObjectIdForLogMsg(
-                    oneLinkObjClass.code,
-                    "",
-                    null,
-                    -1
-                ) + "The query to find objects for linkObject class <${oneConfClassObj.code}.${oneConfClassObj.keyFieldIn}=$idObjectInDB>. $sqlQuery"
-            )
+                logger.trace(
+                    CommonFunctions().createObjectIdForLogMsg(
+                        oneLinkObjClass.code,
+                        "",
+                        null,
+                        -1
+                    ) + "The query to find objects for linkObject class <${oneConfClassObj.code}.${oneConfClassObj.keyFieldIn}=$idObjectInDB>. $sqlQuery"
+                )
 
-            val queryStatement = conn.prepareStatement(sqlQuery)
-            val queryResult = queryStatement.executeQuery()
-            // цикл по всем записям linkObjects из бд приемника
-            while (queryResult.next()) {
-                // формирую список полей и значений для одной записи, которую нужно проверить
-                val linkObjectFieldsFromDB = mutableListOf<Fields>()
-                var linkObjectFromDBId = "-1"
-                var isLinkObjectFindInFile = false
-                for (i in 1..queryResult.metaData.columnCount) {
-                    // название поля таблицы
-                    val fieldName = queryResult.metaData.getColumnName(i)
-                    // значение поля таблицы
-                    val fieldValue = queryResult.getString(i)
+                val queryStatement = conn.prepareStatement(sqlQuery)
+                val queryResult = queryStatement.executeQuery()
+                // цикл по всем записям linkObjects из бд приемника
+                while (queryResult.next()) {
+                    // формирую список полей и значений для одной записи, которую нужно проверить
+                    val linkObjectFieldsFromDB = mutableListOf<Fields>()
+                    var linkObjectFromDBId = "-1"
+                    var isLinkObjectFindInFile = false
+                    for (i in 1..queryResult.metaData.columnCount) {
+                        // название поля таблицы
+                        val fieldName = queryResult.metaData.getColumnName(i)
+                        // значение поля таблицы
+                        val fieldValue = queryResult.getString(i)
 
-                    if (oneLinkObjClass.fieldsNotExport.find { it.name == fieldName } == null) {
-                        linkObjectFieldsFromDB.add(Fields(fieldName, fieldValue))
-                        if (fieldName == oneLinkObjClass.keyFieldIn) {
-                            linkObjectFromDBId = fieldValue
+                        if (oneLinkObjClass.fieldsNotExport.find { it.name == fieldName } == null) {
+                            linkObjectFieldsFromDB.add(Fields(fieldName, fieldValue))
+                            if (fieldName == oneLinkObjClass.keyFieldIn) {
+                                linkObjectFromDBId = fieldValue
+                            }
                         }
                     }
-                }
 
-                // сравниваю объект из бд приемника со всеми объектами linkObjects того же класса из загружаемого главного объекта oneLoadObject
-                for (oneLinkObject in oneLoadObject.row.linkObjects.filter { it.code == oneLinkObjClass.code }) {
+                    // сравниваю объект из бд приемника со всеми объектами linkObjects того же класса из загружаемого главного объекта oneLoadObject
+                    for (oneLinkObject in oneLoadObject.row.linkObjects.filter { it.code == oneLinkObjClass.code }) {
 
-                    // ид linkObject из файла
-                    val linkObjectFromFileId =
-                        oneLinkObject.row.fields.find { it.fieldName == oneLinkObjClass.keyFieldIn }!!.fieldValue!!
+                        // ид linkObject из файла
+                        val linkObjectFromFileId =
+                            oneLinkObject.row.fields.find { it.fieldName == oneLinkObjClass.keyFieldIn }!!.fieldValue!!
 
-                    // сравниваю значение полей
-                    var isLinkObjectFieldsEqual = true
-                    for ((fieldName, fieldValue) in linkObjectFieldsFromDB) {
-                        if (fieldName != oneLinkObjClass.keyFieldIn && oneLinkObject.row.fields.find { it.fieldName == fieldName }!!.fieldValue != fieldValue &&
-                            oneLinkObjClass.scale?.find { it.refField == fieldName } == null
-                        ) {
+                        // сравниваю значение полей
+                        var isLinkObjectFieldsEqual = true
+                        for ((fieldName, fieldValue) in linkObjectFieldsFromDB) {
+                            if (fieldName != oneLinkObjClass.keyFieldIn && oneLinkObject.row.fields.find { it.fieldName == fieldName }!!.fieldValue != fieldValue &&
+                                oneLinkObjClass.scale?.find { it.refField == fieldName } == null
+                            ) {
+                                logger.debug(
+                                    CommonFunctions().createObjectIdForLogMsg(
+                                        oneLinkObjClass.code,
+                                        oneLinkObjClass.keyFieldIn,
+                                        linkObjectFieldsFromDB,
+                                        -1
+                                    ) + "The linkObject from receiver database did not match with the linkObject from file." +
+                                            //"The database object ID <$linkObjectFromDBFieldId>, " +
+                                            "The file linkObject ID <$linkObjectFromFileId>. " +
+                                            "The difference in the column <$fieldName>."
+                                )
+                                isLinkObjectFieldsEqual = false
+                                break
+                            }
+                        }
+
+                        // сравниваю референсы refTables
+                        if (isLinkObjectFieldsEqual) {
+
                             logger.debug(
                                 CommonFunctions().createObjectIdForLogMsg(
                                     oneLinkObjClass.code,
                                     oneLinkObjClass.keyFieldIn,
                                     linkObjectFieldsFromDB,
                                     -1
-                                ) + "The linkObject from receiver database did not match with the linkObject from file." +
-                                        //"The database object ID <$linkObjectFromDBFieldId>, " +
-                                        "The file linkObject ID <$linkObjectFromFileId>. " +
-                                        "The difference in the column <$fieldName>."
+                                ) + "The linkObject from receiver database has been found in the file by identical field values. " +
+                                        "The file linkObject ID <$linkObjectFromFileId>."
                             )
-                            isLinkObjectFieldsEqual = false
-                            break
+
+                            // Важно. Заменяю значение поля tariff_value.scale_component_id из файла на найденное значение из БД
+                            val valueOfScaleComponentIdFieldFromDB =
+                                //linkObjectFieldsFromDB.find { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }?.fieldValue
+                                linkObjectFieldsFromDB.find { it.fieldName == scalable.scaleComponentFieldName }?.fieldValue
+                            val indexOfScaleComponentIdField =
+                                //oneLinkObject.row.fields.indexOfFirst { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }
+                                oneLinkObject.row.fields.indexOfFirst { it.fieldName == scalable.scaleComponentFieldName }
+                            if (indexOfScaleComponentIdField > -1) {
+                                oneLinkObject.row.fields[indexOfScaleComponentIdField].fieldValue =
+                                    valueOfScaleComponentIdFieldFromDB
+                            }
+
+                            //if (CheckObject().compareObjectRefTables(
+                            if (checkObject.compareObjectRefTables(
+                                    linkObjectFromDBId,
+                                    oneLinkObjClass,
+                                    oneLinkObject.row.refObject,
+                                    oneLinkObject.row.fields,
+                                    jsonConfigFile
+                                )
+                            ) {
+
+                                // проверка шкал
+                                // объекты scaleObjects из базы совпадают/не совпадают с такими же объектами из tariffValue
+                                var isIdenticalScale = true
+
+                                // проверяю есть ли шкала у тарифа в БД приемнике. если шкалы нет, значит объекты scaleObjects нужно добавить
+                                val loadObjectClass = jsonConfigFile.objects.find { it.code == oneLoadObject.code }!!
+                                val idScaleInDB = findScaleIdInDB(loadObjectClass, idObjectInDB)
+
+                                // поиск в БД приемнике scaleObjects и их сравнение с аналогичными объектами из файла
+                                if (idScaleInDB != "") {
+                                    val linkObjectClass =
+                                        jsonConfigFile.objects.find { it.code == oneLinkObject.code }!!
+                                    //isIdenticalScale = ReaderDB().readScaleObject(
+                                    isIdenticalScale = readerDB.readScaleObject(
+                                        linkObjectClass,
+                                        jsonConfigFile,
+                                        oneLinkObject.row.fields,
+                                        "Load",
+                                        oneLinkObject.row.scaleObjects
+                                    )
+                                }
+
+                                if (isIdenticalScale) {
+                                    listLinkObjNotToLoad.add(linkObjectFromFileId)
+                                    isLinkObjectFindInFile = true
+                                    logger.debug(
+                                        CommonFunctions().createObjectIdForLogMsg(
+                                            oneLinkObjClass.code,
+                                            oneLinkObjClass.keyFieldIn,
+                                            oneLinkObject.row.fields,
+                                            -1
+                                        ) + "The linkObject from file was found in database. The database linkObject ID <$linkObjectFromDBId>. It will not be added to the database."
+                                    )
+                                    //break
+                                }
+                            }
                         }
                     }
 
-                    // сравниваю референсы refTables
-                    if (isLinkObjectFieldsEqual) {
+                    // объект linkObjects из базы не найден среди загружаемых, поэтому проставим ему дату "По..." вчерашним числом
+                    if (!isLinkObjectFindInFile) {
 
                         logger.debug(
                             CommonFunctions().createObjectIdForLogMsg(
@@ -614,103 +864,32 @@ class LoadObject {
                                 oneLinkObjClass.keyFieldIn,
                                 linkObjectFieldsFromDB,
                                 -1
-                            ) + "The linkObject from receiver database has been found in the file by identical field values. " +
-                                    "The file linkObject ID <$linkObjectFromFileId>."
+                            ) + "The linkObject from receiver database was not found in the file. Its <valid_to> date will be updated."
                         )
 
-                        // Важно. Заменяю значение поля tariff_value.scale_component_id из файла на найденное значение из БД
-                        val valueOfScaleComponentIdFieldFromDB =
-                            //linkObjectFieldsFromDB.find { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }?.fieldValue
-                            linkObjectFieldsFromDB.find { it.fieldName == scalable.scaleComponentFieldName }?.fieldValue
-                        val indexOfScaleComponentIdField =
-                            //oneLinkObject.row.fields.indexOfFirst { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }
-                            oneLinkObject.row.fields.indexOfFirst { it.fieldName == scalable.scaleComponentFieldName }
-                        if (indexOfScaleComponentIdField > -1) {
-                            oneLinkObject.row.fields[indexOfScaleComponentIdField].fieldValue =
-                                valueOfScaleComponentIdFieldFromDB
-                        }
+                        sqlQueryLinkObject += "\nupdate ${oneLinkObjClass.tableName} set valid_to=CURRENT_DATE-1 where ${oneLinkObjClass.keyFieldIn}=$linkObjectFromDBId; \n"
 
-                        if (CheckObject().compareObjectRefTables(
-                                linkObjectFromDBId,
+                        // название переменной для значения сиквенса
+                        val nextValueRevLinkName = "nextValueRevLink$cntVar"
+                        // увеличение счетчика переменных
+                        cntVar++
+                        // объявление переменных для значений сиквенса в psql
+                        sqlQueryLinkObjDeclare += "declare $nextValueRevLinkName integer; \n"
+                        // инициализация переменных для сиквенса в psql
+                        sqlQueryLinkObjInit += "$nextValueRevLinkName=nextval('${CommonConstants().commonSequence}'); \n"
+                        // insert в таблицу аудита новой записи объекта linkObject
+                        sqlQueryLinkObject +=
+                            createMainInsUpdQuery(
+                                null,
                                 oneLinkObjClass,
-                                oneLinkObject.row.refObject,
-                                oneLinkObject.row.fields,
-                                jsonConfigFile
+                                linkObjectFromDBId,
+                                nextValueRevLinkName,
+                                "insertAudSelectValue"
                             )
-                        ) {
-
-                            // проверка шкал
-                            // объекты scaleObjects из базы совпадают/не совпадают с такими же объектами из tariffValue
-                            var isIdenticalScale = true
-
-                            // проверяю есть ли шкала у тарифа в БД приемнике. если шкалы нет, значит объекты scaleObjects нужно добавить
-                            val loadObjectClass = jsonConfigFile.objects.find { it.code == oneLoadObject.code }!!
-                            val idScaleInDB = findScaleIdInDB(loadObjectClass, idObjectInDB)
-
-                            // поиск в БД приемнике scaleObjects и их сравнение с аналогичными объектами из файла
-                            if (idScaleInDB != "") {
-                                val linkObjectClass = jsonConfigFile.objects.find { it.code == oneLinkObject.code }!!
-                                //isIdenticalScale = ReaderDB().readScaleObject(
-                                isIdenticalScale = readerDB.readScaleObject(
-                                    linkObjectClass,
-                                    jsonConfigFile,
-                                    oneLinkObject.row.fields,
-                                    "Load",
-                                    oneLinkObject.row.scaleObjects
-                                )
-                            }
-
-                            if (isIdenticalScale) {
-                                listLinkObjNotToLoad.add(linkObjectFromFileId)
-                                isLinkObjectFindInFile = true
-                                logger.debug(
-                                    CommonFunctions().createObjectIdForLogMsg(
-                                        oneLinkObjClass.code,
-                                        oneLinkObjClass.keyFieldIn,
-                                        oneLinkObject.row.fields,
-                                        -1
-                                    ) + "The linkObject from file was found in database. The database linkObject ID <$linkObjectFromDBId>. It will not be added to the database."
-                                )
-                                break
-                            }
-                        }
                     }
                 }
-
-                // объект linkObjects из базы не найден среди загружаемых, поэтому проставим ему дату "По..." вчерашним числом
-                if (!isLinkObjectFindInFile) {
-
-                    logger.debug(
-                        CommonFunctions().createObjectIdForLogMsg(
-                            oneLinkObjClass.code,
-                            oneLinkObjClass.keyFieldIn,
-                            linkObjectFieldsFromDB,
-                            -1
-                        ) + "The linkObject from receiver database was not found in the file. Its <valid_to> date will be updated."
-                    )
-
-                    sqlQueryLinkObject += "\nupdate ${oneLinkObjClass.tableName} set valid_to=CURRENT_DATE-1 where ${oneLinkObjClass.keyFieldIn}=$linkObjectFromDBId; \n"
-
-                    // название переменной для значения сиквенса
-                    val nextValueRevLinkName = "nextValueRevLink$cntVar"
-                    // увеличение счетчика переменных
-                    cntVar++
-                    // объявление переменных для значений сиквенса в psql
-                    sqlQueryLinkObjDeclare += "declare $nextValueRevLinkName integer; \n"
-                    // инициализация переменных для сиквенса в psql
-                    sqlQueryLinkObjInit += "$nextValueRevLinkName=nextval('${CommonConstants().commonSequence}'); \n"
-                    // insert в таблицу аудита новой записи объекта linkObject
-                    sqlQueryLinkObject +=
-                        createMainInsUpdQuery(
-                            null,
-                            oneLinkObjClass,
-                            linkObjectFromDBId,
-                            nextValueRevLinkName,
-                            "insertAudSelectValue"
-                        )
-                }
+                queryResult.close()
             }
-            queryResult.close()
 
             // все объекты linkObjects того же класса из загружаемого главного объекта oneLoadObject
             for (oneLinkObject in oneLoadObject.row.linkObjects.filter { it.code == oneLinkObjClass.code }) {
@@ -897,7 +1076,7 @@ class LoadObject {
     }
 
     // получаю идентификатор объекта в базе приемнике, либо генерю новый
-    private fun getObjIdInDB(
+    public fun getObjIdInDB(
         objFieldsList: List<Fields>,
         oneConfigClass: ObjectCfg,
         nestedLevel: Int,
@@ -914,7 +1093,7 @@ class LoadObject {
             return idObjectInDB
         }
 
-        val checkObject = CheckObject()
+        //val checkObject = CheckObject()
 
         // поиск объекта в БД
         idObjectInDB = checkObject.findObjectInDB(objFieldsList, oneConfigClass, -1)
@@ -932,12 +1111,14 @@ class LoadObject {
             val listChildRef = mutableListOf<Fields>()
             if (oneConfigClass.refObjects.find { it.keyType.lowercase() == "inchild" } != null && nestedLevel < 2) {
                 for (oneRefObjInChildDescr in oneConfigClass.refObjects.filter { it.keyType.lowercase() == "inchild" }) {
-                    listChildRef.add(
-                        Fields(
-                            oneRefObjInChildDescr.refField,
-                            objFieldsList.find { it.fieldName == oneRefObjInChildDescr.refField }!!.fieldValue!!
+                    if (objFieldsList.find { it.fieldName == oneRefObjInChildDescr.refField }!!.fieldValue != null) {
+                        listChildRef.add(
+                            Fields(
+                                oneRefObjInChildDescr.refField,
+                                objFieldsList.find { it.fieldName == oneRefObjInChildDescr.refField }!!.fieldValue!!
+                            )
                         )
-                    )
+                    }
                 }
             }
             // запоминаю только главные объекты и референсы 1 уровня. референсы 2 уровня запоминаю только если у их класса нет рефернсов inchild
@@ -950,7 +1131,7 @@ class LoadObject {
     }
 
     // получить следующее значение последовательности postgresql
-    private fun nextSequenceValue(sequence: String): String {
+    public fun nextSequenceValue(sequence: String): String {
 
         val sqlQuery = "SELECT nextval('${sequence}')"
         val connNextSequence = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
@@ -1020,12 +1201,14 @@ class LoadObject {
                                             oneRefObject.nestedLevel,
                                             true
                                         )
-                                    if (itemFromAttribute is ObjectNode) {
-                                        (itemFromAttribute as ObjectNode).put(fieldNameInJsonStr, refFieldValueNew)
-                                    } else if (attributeRecord is ObjectNode) {
-                                        (attributeRecord as ObjectNode).put(fieldNameInJsonStr, refFieldValueNew)
-                                    } else {
-                                        (attributeRecord as ArrayNode).set(index, refFieldValueNew)
+                                    if (fieldValueInJsonStr != refFieldValueNew) {
+                                        if (itemFromAttribute is ObjectNode) {
+                                            (itemFromAttribute as ObjectNode).put(fieldNameInJsonStr, refFieldValueNew)
+                                        } else if (attributeRecord is ObjectNode) {
+                                            (attributeRecord as ObjectNode).put(fieldNameInJsonStr, refFieldValueNew)
+                                        } else {
+                                            (attributeRecord as ArrayNode).set(index, refFieldValueNew)
+                                        }
                                     }
                                 }
                             }
@@ -1089,7 +1272,8 @@ class LoadObject {
                     ) + "<The reference object <$refField.=${oneLoadObjFields.find { it.fieldName == refField }!!.fieldValue.toString()}>" +
                             " was not found in the receiver database>. "
                 )
-                exitProcess(-1)
+                //exitProcess(-1)
+                exitFromProgram()
             }
 
             // установка нового значения референса
@@ -1139,7 +1323,7 @@ class LoadObject {
                             "update ${oneConfigClassDescr.tableName} set ${oneRefObjInChildDescr.refField}=$refFieldValueNew " +
                                     " where ${oneConfigClassDescr.keyFieldIn}=$oneLoadObjIdNew"
                         val queryStatement = conn.prepareStatement(sqlQuery)
-                        logger.debug(
+                        logger.trace(
                             CommonFunctions().createObjectIdForLogMsg(
                                 oneConfigClassDescr.code,
                                 oneConfigClassDescr.keyFieldOut,
@@ -1311,13 +1495,13 @@ class LoadObject {
                                             // перед формированием запроса для объекта scaleComponentValue подставляю значение полей component_id и scalable_amount_id
                                             indexOfField =
                                                 scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == scalable.scaleComponentValueFieldName }
-                                                //scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == "component_id" }
+                                            //scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == "component_id" }
                                             scaleComponentValueObject.row.fields[indexOfField].fieldValue =
                                                 idScaleComponentObjectInDB
 
                                             indexOfField =
                                                 scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == scalable.scalableAmountFieldName }
-                                                //scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == "scalable_amount_id" }
+                                            //scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == "scalable_amount_id" }
                                             scaleComponentValueObject.row.fields[indexOfField].fieldValue =
                                                 idScalableAmountObjectInDB
 
@@ -1360,7 +1544,7 @@ class LoadObject {
 
 
     // знаю ид тарифа в БД приемнике. ищу связанную с ним шкалу
-    private fun findScaleIdInDB(
+    public fun findScaleIdInDB(
         oneConfClassObj: ObjectCfg,
         idObjectInDB: String
     ): String {
@@ -1382,7 +1566,7 @@ class LoadObject {
         return idScaleInDB
     }
 
-    // получаю идентификатор шкалы
+    /*// получаю идентификатор шкалы
     private fun getNewScaleId(
         oneLoadObject: DataDB,
         oneConfClassObj: ObjectCfg,
@@ -1400,9 +1584,21 @@ class LoadObject {
         }
 
         return idScaleInDB
+    }*/
+
+    // Проверка есть ли шкала у тарифа в файле
+    // Если есть то вернут true, иначе false
+    private fun isScaleExistsInfile(
+        oneLoadObject: DataDB,
+    ): Boolean {
+
+        oneLoadObject.row.refObject.find { it.typeRef.lowercase() == "inscale" }?.let { return true }
+
+        return false
     }
 
-    // установка значения идентификатора шкалы в файле
+
+    /*// установка значения идентификатора шкалы в файле
     private fun setNewIdScale(
         oneLoadObject: DataDB,
         idScaleInDB: String
@@ -1437,7 +1633,78 @@ class LoadObject {
                 }
             }
         }
+    }*/
+
+    /*// Возвращает действие, которое необходимо выполнить с объектом: OBJECT_TO_SKIP, OBJECT_TO_UPDATE, OBJECT_TO_INSERT
+    private fun actionWithObjectFromFile(
+        objFieldsList: List<Fields>,
+        oneConfigClass: ObjectCfg,
+        idObjectInDB: String
+    ): Int {
+
+        var result = OBJECT_TO_INSERT
+
+        var filterObjCond = ""
+        if (oneConfigClass.filterObjects != "") {
+            filterObjCond += " and ${oneConfigClass.filterObjects} "
+        }
+
+        // запрос на поиск объекта
+        val sqlQuery = "select * " +
+                "from ${oneConfigClass.tableName} " +
+                "where ${oneConfigClass.keyFieldIn}='$idObjectInDB' and audit_state = 'A' $filterObjCond"
+
+        val queryStatement = conn.prepareStatement(sqlQuery)
+        val queryResult = queryStatement.executeQuery()
+
+        if (queryResult.isBeforeFirst) {
+
+            // список полей, которые нужно проверить
+            while (queryResult.next()) {
+                for (i in 1..queryResult.metaData.columnCount) {
+
+                    // название поля таблицы
+                    val fieldName = queryResult.metaData.getColumnName(i)
+                    // значение поля таблицы
+                    val fieldValue = queryResult.getString(i)
+
+                    // Если
+                    // -название колонки из таблицы не найдено среди полей, которые не нужно проверять И
+                    // -в поля исключения добавляю keyFieldIn (id) И
+                    // -значение колонки из таблицы не равно значению поля из файла,
+                    // то ошибка
+                    if (oneConfigClass.fieldsNotExport.find { it.name == fieldName } == null &&
+                        fieldName != oneConfigClass.keyFieldIn &&
+                        objFieldsList.find { it.fieldName == fieldName }!!.fieldValue != fieldValue) {
+
+                        result = OBJECT_TO_UPDATE
+                        break
+
+                    }
+                }
+
+                if (result == OBJECT_TO_UPDATE) {
+                    break
+                }
+
+            }
+
+            if (result != OBJECT_TO_UPDATE) {
+                result = OBJECT_TO_SKIP
+            }
+
+        }
+
+        queryResult.close()
+
+        return result
+    }*/
+
+    private fun exitFromProgram() {
+        createReport.writeReportOfProgramExecution("load")
+        logger.info("The object file has been uploaded with error")
+        exitProcess(-1)
     }
-    //scalable.isClassHaveScaleComponent(oneLinkObject)
+
 }
 

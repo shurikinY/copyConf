@@ -274,7 +274,7 @@ class ReaderDB {
                 isSaveLinkObject
             )
         }
-        logger.debug(
+        logger.trace(
             CommonFunctions().createObjectIdForLogMsg(oneConfigClass.code, "", null, -1) +
                     "Query to the main object: $sqlQuery"
         )
@@ -705,7 +705,7 @@ class ReaderDB {
         sqlQuery = "select * " +
                 "from ${jsonConfigObject.tableName} where audit_state = 'A' and $conditionSql " +
                 "order by id"
-        logger.debug(
+        logger.trace(
             CommonFunctions().createObjectIdForLogMsg(jsonConfigObject.code, refField, fieldValueForLog) +
                     "Query to the reference object (lvl ${nestedLevel}): $sqlQuery"
         )
@@ -811,8 +811,9 @@ class ReaderDB {
                     "select ${oneRefFieldsJson.name} " +
                             "from ${jsonCfgOneObj.tableName} " +
                             " where audit_state = 'A' and ${jsonCfgOneObj.keyFieldIn} = ${tblFieldsOneObj.find { it.fieldName == jsonCfgOneObj.keyFieldIn }!!.fieldValue} " +
-                            filterObjCond
-                logger.debug(
+                            filterObjCond +
+                            " order by id"
+                logger.trace(
                     CommonFunctions().createObjectIdForLogMsg(
                         jsonCfgOneObj.code,
                         jsonCfgOneObj.keyFieldIn,
@@ -937,7 +938,7 @@ class ReaderDB {
                     "join $linkTableName rel_tbl on rel_tbl.$linkKeyFieldIn = link_tbl.$linkFieldName " +
                     "where rel_tbl.audit_state = 'A' and link_tbl.${oneLinkRefObj.refField} = ${tblFieldsOneObj.find { it.fieldName == jsonCfgOneObj.keyFieldIn }?.fieldValue}" +
                     filterObjCond
-            logger.debug(
+            logger.trace(
                 CommonFunctions().createObjectIdForLogMsg(
                     jsonCfgOneObj.code,
                     jsonCfgOneObj.keyFieldIn,
@@ -1270,7 +1271,7 @@ class ReaderDB {
             sqlQuery += ") " + "order by id"
         }
 
-        logger.debug(
+        logger.trace(
             CommonFunctions().createObjectIdForLogMsg(
                 oneConfigClass.code,
                 oneConfigClass.keyFieldIn,
@@ -1322,7 +1323,7 @@ class ReaderDB {
 
         var iRowCount = 0 // кол-во записей класса scaleConfigClass в БД
         val connCompare = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-        logger.debug(
+        logger.trace(
             CommonFunctions().createObjectIdForLogMsg(
                 linkConfigClass.code,
                 linkConfigClass.keyFieldIn,

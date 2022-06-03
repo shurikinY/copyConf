@@ -3,6 +3,7 @@ package com.solanteq.service
 import com.solanteq.security.PasswordEncryptor
 import org.slf4j.LoggerFactory
 import kotlin.system.exitProcess
+import java.sql.DriverManager
 
 public var REGIM = ""
 public var CONN_STRING = ""
@@ -16,10 +17,27 @@ public var OBJECT_FILE = ""
 public var FILTER_FILE = ""
 public var AUDIT_DATE = ""
 
+// Класс описывает действия с объектом при проверке/загрузке
+data class ActionWithObject(
+    var id: String,
+    var classCode: String,
+    var actionInsert: Boolean,
+    var actionUpdateMainRecord: Boolean,
+    var actionUpdateRefTables: Boolean,
+    var actionUpdateLinkRecord: Boolean,
+    // При проверке(check), если actionUpdateLinkRecord = true, то заполняются поля с запросами.
+    // При этом при загрузке(load) не нужно повторно формировать запросы
+    var queryToUpdateLinkRecDeclare : String,
+    var queryToUpdateLinkRecInit : String,
+    var queryToUpdateLinkRecObject : String,
+    ///////////////////////////////////////////
+    var actionSkip: Boolean
+)
+
 class CommonConstants {
 
     // версия программы
-    val VERSION = "1.0.5.17"
+    val VERSION = "1.0.5.18"
 
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2
@@ -108,23 +126,54 @@ fun main(args: Array<String>) {
 
         // режим проверки файла объектов
         if (REGIM == CommonConstants().REGIM_CHECK_OBJFILE) {
-            val checkObject = CheckObject()
+
+            // считывание файла объектов
+            val readJsonFile = ReadJsonFile()
+            val allDataObject = readJsonFile.readObject()
+
+            // действие при загрузке для каждого объекта из файла: добавление/обновление/пропуск
+            val listOfActionWithObject = mutableListOf<ActionWithObject>()
+
+            //val checkObject = CheckObject(allCheckObject)
+            val checkObject = CheckObject
+            checkObject.allCheckObject = allDataObject
+            checkObject.listOfActionWithObject = listOfActionWithObject
+
             logger.info("Start of object file verification")
             checkObject.checkDataObject()
             logger.info("The object file has been successfully verified")
         }
 
-        // режим загрузки файла объектоа
+        // режим загрузки файла объектов
         if (REGIM == CommonConstants().REGIM_LOAD_OBJFILE) {
-            val checkObject = CheckObject()
-            val loadObject = LoadObject()
+            // считывание файла объектов
+            val readJsonFile = ReadJsonFile()
+            val allDataObject = readJsonFile.readObject()
+
+            // действие при загрузке для каждого объекта из файла: добавление/обновление/пропуск
+            val listOfActionWithObject = mutableListOf<ActionWithObject>()
+
+            // коннект к БД
+            val conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
+
+            //val checkObject = CheckObject(allDataObject)
+            val checkObject = CheckObject
+            checkObject.allCheckObject = allDataObject
+            checkObject.listOfActionWithObject = listOfActionWithObject
+
+            //val loadObject = LoadObject(allDataObject)
+            val loadObject = LoadObject
+            loadObject.allLoadObject = allDataObject
+            loadObject.listOfActionWithObject = listOfActionWithObject
+            loadObject.conn = conn
+
             logger.info("Start of object file verification")
             checkObject.checkDataObject()
-            logger.info("The object file has been successfully verified")
+            logger.info("The object file has been successfully verified\n")
             logger.info("Start load object file")
-            //loadObject.loadDataObject(checkObject.allCheckObject, checkObject.jsonConfigFile)
             loadObject.loadDataObject()
-            logger.info("The object file has been uploaded successfully")
+            logger.info("The object file has been successfully uploaded")
+            conn.close()
         }
 
     } else {

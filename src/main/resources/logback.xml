@@ -47,7 +47,7 @@
     <include optional="true" resource="included.logback.xml"/>
     <include optional="true" file="${${configDir.parameter}:-./config}/logback.xml"/>
 
-    <root level="DEBUG">
+    <root level="INFO">
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="COMMON"/>
     </root>
