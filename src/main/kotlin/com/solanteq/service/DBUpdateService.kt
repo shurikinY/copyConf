@@ -95,22 +95,22 @@ fun main(args: Array<String>) {
 
     val logger = LoggerFactory.getLogger("Main")
 
-    if (!File(LOGBACK_FILE_PATH).exists()) {
-        logger.error("Not found logback.xml file on the path <$LOGBACK_FILE_PATH>")
-        exitProcess(-1)
-    }
+    if (File(LOGBACK_FILE_PATH).exists()) {
+        //logger.error("Not found logback.xml file on the path <$LOGBACK_FILE_PATH>")
+        //exitProcess(-1)
 
-    val context = LoggerFactory.getILoggerFactory() as LoggerContext
-    try {
-        val configurator = JoranConfigurator()
-        configurator.context = context;
-        context.reset();
-        configurator.doConfigure(LOGBACK_FILE_PATH)
-    } catch (e: JoranException) {
-        println("JoranException : $e")
-        exitProcess(-1)
+        val context = LoggerFactory.getILoggerFactory() as LoggerContext
+        try {
+            val configurator = JoranConfigurator()
+            configurator.context = context;
+            context.reset();
+            configurator.doConfigure(LOGBACK_FILE_PATH)
+        } catch (e: JoranException) {
+            println("JoranException : $e")
+            exitProcess(-1)
+        }
+        //StatusPrinter.printInCaseOfErrorsOrWarnings(context);
     }
-    //StatusPrinter.printInCaseOfErrorsOrWarnings(context);
 
     //val logger = LoggerFactory.getLogger("Main")
     logger.info("SOLAR DataBase Copy Configuration Tool " + CommonConstants().VERSION)
