@@ -1,9 +1,14 @@
 package com.solanteq.service
 
+import ch.qos.logback.classic.LoggerContext
+import ch.qos.logback.classic.joran.JoranConfigurator
+import ch.qos.logback.core.joran.spi.JoranException
 import com.solanteq.security.PasswordEncryptor
 import org.slf4j.LoggerFactory
-import kotlin.system.exitProcess
+import java.io.File
 import java.sql.DriverManager
+import kotlin.system.exitProcess
+
 
 public var REGIM = ""
 public var CONN_STRING = ""
@@ -16,6 +21,7 @@ public var TASK_FILE = ""
 public var OBJECT_FILE = ""
 public var FILTER_FILE = ""
 public var AUDIT_DATE = ""
+private val LOGBACK_FILE_PATH = "resources\\config\\logback.xml"
 
 // Класс описывает действия с объектом при проверке/загрузке
 data class ActionWithObject(
@@ -27,9 +33,9 @@ data class ActionWithObject(
     var actionUpdateLinkRecord: Boolean,
     // При проверке(check), если actionUpdateLinkRecord = true, то заполняются поля с запросами.
     // При этом при загрузке(load) не нужно повторно формировать запросы
-    var queryToUpdateLinkRecDeclare : String,
-    var queryToUpdateLinkRecInit : String,
-    var queryToUpdateLinkRecObject : String,
+    var queryToUpdateLinkRecDeclare: String,
+    var queryToUpdateLinkRecInit: String,
+    var queryToUpdateLinkRecObject: String,
     ///////////////////////////////////////////
     var actionSkip: Boolean
 )
@@ -88,6 +94,25 @@ class CommonConstants {
 fun main(args: Array<String>) {
 
     val logger = LoggerFactory.getLogger("Main")
+
+    if (!File(LOGBACK_FILE_PATH).exists()) {
+        logger.error("Not found logback.xml file on the path <$LOGBACK_FILE_PATH>")
+        exitProcess(-1)
+    }
+
+    val context = LoggerFactory.getILoggerFactory() as LoggerContext
+    try {
+        val configurator = JoranConfigurator()
+        configurator.context = context;
+        context.reset();
+        configurator.doConfigure(LOGBACK_FILE_PATH)
+    } catch (e: JoranException) {
+        println("JoranException : $e")
+        exitProcess(-1)
+    }
+    //StatusPrinter.printInCaseOfErrorsOrWarnings(context);
+
+    //val logger = LoggerFactory.getLogger("Main")
     logger.info("SOLAR DataBase Copy Configuration Tool " + CommonConstants().VERSION)
 
     var argsString = " "
@@ -134,13 +159,25 @@ fun main(args: Array<String>) {
             // действие при загрузке для каждого объекта из файла: добавление/обновление/пропуск
             val listOfActionWithObject = mutableListOf<ActionWithObject>()
 
-            //val checkObject = CheckObject(allCheckObject)
             val checkObject = CheckObject
             checkObject.allCheckObject = allDataObject
             checkObject.listOfActionWithObject = listOfActionWithObject
 
             logger.info("Start of object file verification")
-            checkObject.checkDataObject()
+            try {
+                checkObject.checkDataObject()
+            } catch (e: Exception) {
+
+                var stackTrace = ""
+                for (item in e.stackTrace) {
+                    stackTrace += "$item\n"
+                }
+
+                logger.error(
+                    "Verification error: $e\n$stackTrace"
+                )
+                exitProcess(-1)
+            }
             logger.info("The object file has been successfully verified")
         }
 
@@ -154,9 +191,8 @@ fun main(args: Array<String>) {
             val listOfActionWithObject = mutableListOf<ActionWithObject>()
 
             // коннект к БД
-            val conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
+            //val conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
 
-            //val checkObject = CheckObject(allDataObject)
             val checkObject = CheckObject
             checkObject.allCheckObject = allDataObject
             checkObject.listOfActionWithObject = listOfActionWithObject
@@ -165,21 +201,50 @@ fun main(args: Array<String>) {
             val loadObject = LoadObject
             loadObject.allLoadObject = allDataObject
             loadObject.listOfActionWithObject = listOfActionWithObject
-            loadObject.conn = conn
+            //loadObject.conn = conn
 
             logger.info("Start of object file verification")
-            checkObject.checkDataObject()
+            try {
+                checkObject.checkDataObject()
+            } catch (e: Exception) {
+
+                var stackTrace = ""
+                for (item in e.stackTrace) {
+                    stackTrace += "$item\n"
+                }
+                logger.error(
+                    "Verification error: $e\n$stackTrace"
+                )
+                exitProcess(-1)
+
+            }
             logger.info("The object file has been successfully verified\n")
+
             logger.info("Start load object file")
-            loadObject.loadDataObject()
+            try {
+                loadObject.loadDataObject()
+            } catch (e: Exception) {
+
+                var stackTrace = ""
+                for (item in e.stackTrace) {
+                    stackTrace += "$item\n"
+                }
+                logger.error(
+                    "Loading error: $e\n$stackTrace"
+                )
+                exitProcess(-1)
+
+            }
             logger.info("The object file has been successfully uploaded")
-            conn.close()
+
+            //conn.close()
         }
 
     } else {
         logger.error("Unknown startup mode")
     }
 }
+
 
 class DBUpdateService {
 

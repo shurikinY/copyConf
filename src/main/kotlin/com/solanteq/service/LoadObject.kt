@@ -31,7 +31,8 @@ object LoadObject {
     public lateinit var listOfActionWithObject: MutableList<ActionWithObject>
 
     // коннект к БД
-    public lateinit var conn: Connection
+    //public lateinit var conn: Connection
+    public val conn: Connection = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
 
     /*// Объект из файла:
     // 0 - полностью совпадает с объектом из БД
@@ -47,7 +48,7 @@ object LoadObject {
 
     private val scalable = Scalable(jsonConfigFile)
 
-    private val readerDB = ReaderDB()
+    //private val readerDB = ReaderDB()
 
     //private val checkObject = CheckObject(allLoadObject)
     private val checkObject = CheckObject
@@ -59,7 +60,7 @@ object LoadObject {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    private var listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
+    //private var listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
 
     fun loadDataObject() {
 
@@ -242,7 +243,7 @@ object LoadObject {
         jsonConfigFile: RootCfg
     ) {
 
-        listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
+        //listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
 
         //val sqlQueryUpdate: String = ""
         //val sqlQueryInsert: String = ""
@@ -592,7 +593,7 @@ object LoadObject {
     }
 
     // формирование запроса на вставку данных в таблицы связи, описанные в параметре refTables файла конфигурации
-    private fun createRefTablesQuery(
+    public fun createRefTablesQuery(
         oneLoadObject: DataDB,
         oneConfClassObj: ObjectCfg,
         allLoadObject: List<DataDB>?,
@@ -641,6 +642,7 @@ object LoadObject {
 
     }
 
+    /*
     // формирование условий запроса для референсов linkObjects
     public fun createLinkObjectsQuery(
         oneLoadObject: DataDB,
@@ -965,9 +967,9 @@ object LoadObject {
 
         return arrayOf(sqlQueryLinkObjDeclare, sqlQueryLinkObjInit, sqlQueryLinkObject)
     }
-
+*/
     // формирование запроса insert/update для основной таблицы загружаемого объекта
-    private fun createMainInsUpdQuery(
+    public fun createMainInsUpdQuery(
         oneLoadObject: DataDB?, // должно быть null только для insertAudSelectValue
         oneConfClassObj: ObjectCfg,
         idObjectInDB: String,
@@ -1146,6 +1148,7 @@ object LoadObject {
         return nextValue
     }
 
+    /*
     // установка нового значения ссылочного поля для референса типа fieldJson
     public fun setNewIdFieldJson(
         oneLoadObjFields: List<Fields>,
@@ -1224,6 +1227,9 @@ object LoadObject {
         }
     }
 
+     */
+/*
+
     // установка нового значения ссылочного поля в файле для референса типа refFields
     public fun setNewIdRefFields(
         //oneLoadObject: DataDB,
@@ -1286,7 +1292,7 @@ object LoadObject {
 
         }
     }
-
+*/
     // создание запроса для изменения полей референсов типа inchild
     private fun createQueryForFamilyObject(
         allLoadObject: DataDBMain,
@@ -1338,7 +1344,8 @@ object LoadObject {
         }
     }
 
-    private fun createScaleObjectsQuery(
+/*
+    public fun createScaleObjectsQuery(
         oneLinkObject: DataDB,
         jsonConfigFile: RootCfg,
         cntVariable: Int
@@ -1541,7 +1548,7 @@ object LoadObject {
 
         return arrayOf(sqlQueryScaleObjDeclare, sqlQueryScaleObjInit, sqlQueryScale, cntVar.toString())
     }
-
+*/
 
     // знаю ид тарифа в БД приемнике. ищу связанную с ним шкалу
     public fun findScaleIdInDB(
