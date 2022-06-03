@@ -1,0 +1,29 @@
+{
+  "cfgList": [
+    {
+      "version": "1.0.9",
+      "dbType": "postgres",
+      "dateCreate": "2022-06-03 15:38:16",
+      "auditDate": "2022-02-15 00:00:00",
+      "cfgName": "Конфигурация для объекта тип tariff"
+    }
+  ],
+  "element": [
+    {
+      "code": "tariff",
+      "loadMode": "Safe",
+      "keyFieldIn": [
+        {
+          "fieldName": "id",
+          "fieldValue": "100093"
+        }
+      ],
+      "keyFieldOut": [
+        {
+          "fieldName": "code",
+          "fieldValue": "tariff_scale"
+        }
+      ]
+    }
+  ]
+}

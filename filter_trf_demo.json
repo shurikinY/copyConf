@@ -1,0 +1,41 @@
+{
+  "include": [
+    {
+      "code": "tariffAtchRule111",
+      "saveMode": "Safe",
+      "filterObjects": ""
+    },
+    {
+      "code": "finInstitution111",
+      "saveMode": "Safe",
+      "filterObjects": ""
+    },
+    {
+      "code": "tariff",
+      "saveMode": "Safe",
+      "filterObjects": "id= 100093"
+    },
+    {
+      "code": "tariffGroup111",
+      "saveMode": "Safe",
+      "filterObjects": ""
+    },
+    {
+      "code": "classifierType111",
+      "saveMode": "Safe",
+      "filterObjects": ""
+    },
+    {
+      "code": "classifierValue111",
+      "saveMode": "Safe",
+      "filterObjects": ""
+    }
+  ],
+  "exclude": [
+    {
+      "code": "tariffGroup",
+      "saveMode": "Safe",
+      "filterObjects": ""
+    }
+  ]
+}
