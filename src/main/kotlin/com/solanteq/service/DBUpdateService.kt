@@ -104,7 +104,7 @@ fun main(args: Array<String>) {
         try {
             val configurator = JoranConfigurator()
             configurator.context = context;
-            context.reset();
+            //context.reset();
             configurator.doConfigure(LOGBACK_FILE_PATH)
         } catch (e: JoranException) {
             println("JoranException : $e")
