@@ -2,13 +2,13 @@ package com.solanteq.service
 
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.joran.JoranConfigurator
+import ch.qos.logback.classic.spi.LoggerContextListener
 import ch.qos.logback.core.joran.spi.JoranException
 import com.solanteq.security.PasswordEncryptor
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.sql.DriverManager
 import kotlin.system.exitProcess
-
 
 public var REGIM = ""
 public var CONN_STRING = ""
@@ -21,7 +21,8 @@ public var TASK_FILE = ""
 public var OBJECT_FILE = ""
 public var FILTER_FILE = ""
 public var AUDIT_DATE = ""
-private val LOGBACK_FILE_PATH = "config\\logback.xml"
+//private val LOGBACK_FILE_PATH = "config\\logback.xml"
+private val LOGBACK_FILE_PATH = "config/logback.xml"
 
 // Класс описывает действия с объектом при проверке/загрузке
 data class ActionWithObject(
