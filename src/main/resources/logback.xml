@@ -11,7 +11,7 @@
     <property scope="context" name="async.appender.queue.size" value="${async.appender.queue.size:-1000}"/>
 
     <!-- including plain properties -->
-    <include optional="true" file="${${configDir.parameter}:-./config}/properties.logback.xml"/>
+    <!--<include optional="true" file="${${configDir.parameter}:-./config}/properties.logback.xml"/>-->
 
     <!-- including distribution properties (JDBC url etc.) 
     <include optional="true" resource="distribution.properties.logback.xml"/>-->
