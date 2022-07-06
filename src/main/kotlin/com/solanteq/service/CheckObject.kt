@@ -880,8 +880,10 @@ object CheckObject {
             // нашли референсный объект среди главных объектов. Теперь проверка референсов найденного главного объекта
             if (indexInAllCheckObject > -1) {
 
-                // если в цепочке референсов повторно встретили объект, то ошибка
-                if (chainCheckObject.contains(allCheckObject[indexInAllCheckObject]) && oneRefObject.typeRef.lowercase() != "inparent" && oneRefObject.typeRef.lowercase() != "inchild") {
+                // если в цепочке референсов встретили объект проверяемый главный объект, то ошибка
+                if (/*chainCheckObject.contains(allCheckObject[indexInAllCheckObject])*/ chainCheckObject.first() == allCheckObject[indexInAllCheckObject] &&
+                    oneRefObject.typeRef.lowercase() != "inparent" && oneRefObject.typeRef.lowercase() != "inchild"
+                ) {
                     val mainClass = jsonConfigFile.objects.find { it.code == chainCheckObject.first().code }!!
                     logger.error(
                         CommonFunctions().createObjectIdForLogMsg(
@@ -895,15 +897,19 @@ object CheckObject {
                                 "Object.${mainClass.keyFieldIn}=${chainCheckObject.first().row.fields.find { it.fieldName == mainClass.keyFieldIn }!!.fieldValue}"
                     )
                     exitProcess(-1)
-                } else if (chainCheckObject.contains(allCheckObject[indexInAllCheckObject]) && (oneRefObject.typeRef.lowercase() == "inparent" || oneRefObject.typeRef.lowercase() == "inchild")) {
+                } else if (/*chainCheckObject.contains(allCheckObject[indexInAllCheckObject])*/ chainCheckObject.first() == allCheckObject[indexInAllCheckObject] &&
+                    (oneRefObject.typeRef.lowercase() == "inparent" || oneRefObject.typeRef.lowercase() == "inchild")
+                ) {
                     // референсы подобного типа пропускаю, т.к. они заведомо закольцованы и при загрузке обрабатываются отдельным образом
                     continue
                 }
 
-                chainCheckObject.add(allCheckObject[indexInAllCheckObject])
+                if (!chainCheckObject.contains(allCheckObject[indexInAllCheckObject])) {
+                    chainCheckObject.add(allCheckObject[indexInAllCheckObject])
 
-                // рекурсивный поиск референсных объектов, которые есть среди главных объектов
-                checkRingReference(chainCheckObject, oneConfClassRefObj, jsonConfigFile, allCheckObject)
+                    // рекурсивный поиск референсных объектов, которые есть среди главных объектов
+                    checkRingReference(chainCheckObject, oneConfClassRefObj, jsonConfigFile, allCheckObject)
+                }
             }
         }
     }
@@ -1498,7 +1504,8 @@ object CheckObject {
 
                                 // если объекта нет, то insert в таблицу объекта scalableAmount если не найдено полного соответствия
                                 if (idScalableAmountObjectInDB == "") {
-                                    idScalableAmountObjectInDB = loadObject.nextSequenceValue(scalableAmountClass.sequence)
+                                    idScalableAmountObjectInDB =
+                                        loadObject.nextSequenceValue(scalableAmountClass.sequence)
                                     sqlQueryScale += "\n" +
                                             loadObject.createMainInsUpdQuery(
                                                 scalableAmountObject,
@@ -1629,10 +1636,12 @@ object CheckObject {
             } else if (oneRefObject == null) {
                 continue
             } else if (oneRefObject.typeRef.lowercase() == "inchild") {
-                idObjectInDB = loadObject.getObjIdInDB(oneRefObject.row.fields, oneRefClassObj, oneRefObject.nestedLevel, false)
+                idObjectInDB =
+                    loadObject.getObjIdInDB(oneRefObject.row.fields, oneRefClassObj, oneRefObject.nestedLevel, false)
             } else {
                 // поиск id референсного объекта в бд приемнике
-                idObjectInDB = loadObject.getObjIdInDB(oneRefObject.row.fields, oneRefClassObj, oneRefObject.nestedLevel, true)
+                idObjectInDB =
+                    loadObject.getObjIdInDB(oneRefObject.row.fields, oneRefClassObj, oneRefObject.nestedLevel, true)
             }
 
             // для референса inchild нужно записать значение null, т.к. реальное значение еще неизвестно

@@ -33,7 +33,7 @@ data class ActionWithObject(
     var actionUpdateRefTables: Boolean,
     var actionUpdateLinkRecord: Boolean,
     // При проверке(check), если actionUpdateLinkRecord = true, то заполняются поля с запросами.
-    // При этом при загрузке(load) не нужно повторно формировать запросы
+    // Поэтому при загрузке(load) не нужно повторно формировать запросы
     var queryToUpdateLinkRecDeclare: String,
     var queryToUpdateLinkRecInit: String,
     var queryToUpdateLinkRecObject: String,
@@ -44,7 +44,7 @@ data class ActionWithObject(
 class CommonConstants {
 
     // версия программы
-    val VERSION = "1.0.5.18"
+    val VERSION = "1.0.5.19"
 
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2
