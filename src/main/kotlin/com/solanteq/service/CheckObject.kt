@@ -497,6 +497,28 @@ object CheckObject {
 
         var idObjectInDB = "-"
 
+        if (oneConfigClass.keyFieldOut == "") {
+            logger.error(
+                CommonFunctions().createObjectIdForLogMsg(
+                    oneConfigClass.code,
+                    oneConfigClass.keyFieldOut,
+                    objFieldsList,
+                    nestedLevel
+                ) + "<" + oneConfigClass.keyFieldIn + "=" + objFieldsList.find { it.fieldName == oneConfigClass.keyFieldIn }!!.fieldValue + ">." +
+                        " The " + if (nestedLevel > -1) {
+                    "reference"
+                } else {
+                    ""
+                } + " object class has an empty keyFieldOut, so this " + if (nestedLevel > -1) {
+                    "reference"
+                } else {
+                    ""
+                } + " object cannot be found in receiver database."
+            )
+
+            exitProcess(-1)
+        }
+
         // запрос на поиск объекта
         val sqlQuery = createSqlQueryToFindObj(objFieldsList, oneConfigClass)
         logger.trace(
