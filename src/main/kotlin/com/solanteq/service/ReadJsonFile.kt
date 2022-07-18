@@ -21,6 +21,7 @@ data class CfgList(
 data class ObjectCfg(
     val code: String,
     val name: String,
+    //val aliasDb: String?,
     val tableName: String,
     val sequence: String,
     val tableNameAud: String,
@@ -34,7 +35,6 @@ data class ObjectCfg(
     val refFieldsJson: List<FieldsJson>,
     val refTables: List<RefTables>,
     val scale : List<RefObjects>? = null
-    //val scaleObjects : List<LinkObjects>? = null
 )
 
 data class LinkObjects(
@@ -119,5 +119,10 @@ class ReadJsonFile {
     fun readObject(): DataDBMain {
         return jacksonObjectMapper().readValue<DataDBMain>(File(OBJECT_FILE))
     }
+
+    // считывание файла объектов для загрузки в БД
+    /*fun readDataSources(): DataSources {
+        return jacksonObjectMapper().readValue<DataSources>(File(DATASOURCES_FILE))
+    }*/
 
 }

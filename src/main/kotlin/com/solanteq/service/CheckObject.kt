@@ -38,6 +38,8 @@ object CheckObject {
 
     private var listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
 
+    private var cntForLinkObInQuery: Int = 1
+
     //fun checkDataObject(listOfActionWithObject: MutableList<ActionWithObject>) {
     fun checkDataObject() {
 
@@ -75,11 +77,14 @@ object CheckObject {
         // цикл по главным объектам (главные объекты это объекты, которые нужно загрузить в БД).
         for (oneCheckObject in allCheckObject.element) {
             // поиск описания класса референсного объекта в файле конфигурации
-            var oneConfCheckObj = jsonConfigFile.objects.find { it.code == oneCheckObject.code }!!
+            val oneConfCheckObj = jsonConfigFile.objects.find { it.code == oneCheckObject.code }!!
             val chainCheckObject = mutableListOf<DataDB>(oneCheckObject)
             checkRingReference(chainCheckObject, oneConfCheckObj, jsonConfigFile, allCheckObject.element)
 
-            // цикл по объектам linkObjects
+            // рекурсивная проверка цикличности ссылок объектов linkObjects
+            bypassLinkObjCheckRing(oneCheckObject, chainCheckObject)
+
+            /*// цикл по объектам linkObjects
             for (oneCheckLinkObj in oneCheckObject.row.linkObjects) {
                 oneConfCheckObj = jsonConfigFile.objects.find { it.code == oneCheckLinkObj.code }!!
                 checkRingReference(chainCheckObject, oneConfCheckObj, jsonConfigFile, allCheckObject.element)
@@ -91,7 +96,7 @@ object CheckObject {
                         checkRingReference(chainCheckObject, oneConfCheckObj, jsonConfigFile, allCheckObject.element)
                     }
                 }
-            }
+            }*/
         }
 
         // цикл по объектам. вторая часть проверок
@@ -99,7 +104,10 @@ object CheckObject {
 
             checkOneObject(oneCheckObject, jsonConfigFile, allCheckObject.element)
 
-            // цикл по объектам linkObjects
+            // рекурсивная проверка ссылок объектов linkObjects
+            bypassLinkObjCheckOther(oneCheckObject)
+
+            /*// цикл по объектам linkObjects
             for (oneCheckLinkObj in oneCheckObject.row.linkObjects) {
                 checkOneObject(oneCheckLinkObj, jsonConfigFile, allCheckObject.element)
 
@@ -109,10 +117,10 @@ object CheckObject {
                         checkOneObject(oneCheckScaleObj, jsonConfigFile, allCheckObject.element)
                     }
                 }
-            }
+            }*/
+        }
 
-            //////////////////// Установка значений рефернсов для Главного объекта ////////////////////
-            // поиск описания класса объекта, который нужно проверить, в файле конфигурации
+        for (oneCheckObject in allCheckObject.element) {
 
             var actionInsert: Boolean = false
             var actionUpdateMainRecord: Boolean = false
@@ -125,16 +133,18 @@ object CheckObject {
             val oneConfClassMainObj = jsonConfigFile.objects.find { it.code == oneCheckObject.code }!!
 
             // установка нового значения ссылочного поля в файле для референса типа fieldJson
-            //LoadObject(allCheckObject).setNewIdFieldJson(
             setNewIdFieldJson(
                 oneCheckObject.row.fields,
                 oneCheckObject.row.refObject,
                 oneConfClassMainObj,
                 jsonConfigFile
             )
-            for (oneLinkObject in oneCheckObject.row.linkObjects) {
+
+            // рекурсивная установка новых значений ссылок типа fieldJson объектов linkObjects
+            bypassLinkObjSetNewIdFieldJson(oneCheckObject)
+
+            /*for (oneLinkObject in oneCheckObject.row.linkObjects) {
                 var oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneLinkObject.code }!!
-                //LoadObject(allCheckObject).setNewIdFieldJson(
                 setNewIdFieldJson(
                     oneLinkObject.row.fields,
                     oneLinkObject.row.refObject,
@@ -143,7 +153,6 @@ object CheckObject {
                 )
                 for (oneScaleObject in oneLinkObject.row.scaleObjects) {
                     oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneScaleObject.code }!!
-                    //LoadObject(allCheckObject).setNewIdFieldJson(
                     setNewIdFieldJson(
                         oneScaleObject.row.fields,
                         oneScaleObject.row.refObject,
@@ -151,10 +160,9 @@ object CheckObject {
                         jsonConfigFile
                     )
                 }
-            }
+            }*/
 
             // установка нового значения ссылочного поля в файле для референса типа refFields
-            //LoadObject(allCheckObject).setNewIdRefFields(
             setNewIdRefFields(
                 oneCheckObject.row.fields,
                 oneCheckObject.row.refObject,
@@ -162,7 +170,11 @@ object CheckObject {
                 jsonConfigFile,
                 null
             )
-            for (oneLinkObject in oneCheckObject.row.linkObjects) {
+
+            // рекурсивная установка новых значений ссылок типа refField объектов linkObjects
+            bypassLinkObjSetNewIdRefField(oneCheckObject)
+
+            /*for (oneLinkObject in oneCheckObject.row.linkObjects) {
                 var oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneLinkObject.code }!!
                 //LoadObject(allCheckObject).setNewIdRefFields(
                 setNewIdRefFields(
@@ -183,7 +195,7 @@ object CheckObject {
                         oneCheckObject
                     )
                 }
-            }
+            }*/
 
             // поиск основного объекта в базе приемнике.
             // должен быть найден ровно один объект
@@ -267,8 +279,21 @@ object CheckObject {
             }
 
             // проверка linkObject и формирование запроса на изменение объектов linkObjects
-            val listQueryCondition =
-                //LoadObject.createLinkObjectsQuery(
+
+            cntForLinkObInQuery = 1
+            val sqlQueryConditionArray = arrayOf("", "", "", "1")
+            createLinkObjectsQuery(
+                oneCheckObject,
+                oneConfClassMainObj,
+                jsonConfigFile,
+                idObjectInDB,
+                1,
+                sqlQueryConditionArray
+            )
+            sqlQueryObjDeclare += sqlQueryConditionArray[0]
+            sqlQueryObjInit += sqlQueryConditionArray[1]
+            sqlQueryLinkObject += sqlQueryConditionArray[2]
+            /*val listQueryCondition =
                 createLinkObjectsQuery(
                     oneCheckObject,
                     oneConfClassMainObj,
@@ -277,7 +302,7 @@ object CheckObject {
                 )
             sqlQueryObjDeclare += listQueryCondition[0]
             sqlQueryObjInit += listQueryCondition[1]
-            sqlQueryLinkObject += listQueryCondition[2]
+            sqlQueryLinkObject += listQueryCondition[2]*/
             if (sqlQueryLinkObject != "") {
                 actionUpdateLinkRecord = true
             }
@@ -558,7 +583,7 @@ object CheckObject {
                     ) + "More than one object was found in the receiver database."
                 )
                 connFindObjId.close()
-                exitProcess(-1)
+                //exitProcess(-1)
             }
         } else if (nestedLevel == 0) { // главный объект из файла НЕ найден в базе
             logger.debug(
@@ -1069,9 +1094,7 @@ object CheckObject {
         // установка нового значения шкалы в тарифе
         var indexOfScaleField =
             oneLoadObject.row.fields.indexOfFirst {
-                it.fieldName.lowercase() == scalable.getScaleIdFieldName(
-                    oneLoadObject
-                )
+                it.fieldName.lowercase() == scalable.getScaleIdFieldName(oneLoadObject)
             }
         //oneLoadObject.row.fields.indexOfFirst { it.fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME }
         if (indexOfScaleField > -1 && oneLoadObject.row.fields[indexOfScaleField].fieldValue != idScaleInDB) {
@@ -1085,9 +1108,7 @@ object CheckObject {
             for (oneScaleObject in oneLinkObject.row.scaleObjects) {
                 indexOfScaleField =
                     oneScaleObject.row.fields.indexOfFirst {
-                        it.fieldName.lowercase() == scalable.getScaleIdFieldName(
-                            oneLoadObject
-                        )
+                        it.fieldName.lowercase() == scalable.getScaleIdFieldName(oneLoadObject)
                     }
                 //oneScaleObject.row.fields.indexOfFirst { it.fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME }
                 if (indexOfScaleField > -1 && oneScaleObject.row.fields[indexOfScaleField].fieldValue != idScaleInDB) {
@@ -1102,19 +1123,44 @@ object CheckObject {
         oneLoadObject: DataDB,
         oneConfClassObj: ObjectCfg,
         jsonConfigFile: RootCfg,
-        idObjectInDB: String
-    ): Array<String> {
+        idObjectInDB: String,
+        levelLinkObject: Int,
+        sqlQueryConditionArray: Array<String>
+        //): Array<String> {
+    ) {
 
-        var sqlQueryLinkObjDeclare = ""
+        /*var sqlQueryLinkObjDeclare = ""
         var sqlQueryLinkObjInit = ""
         var sqlQueryLinkObject = ""
-        var cntVar = 1 // счетчик для наименования переменных
+        var cntVar = sqlQueryConditionArray[3].toInt() // счетчик для наименования переменных*/
 
         // все ссылки linkObjects из конфигурации
-        for (oneLinkObjDescription in oneConfClassObj.linkObjects.filter { it.keyType.lowercase() == "ingroup" }) {
+        //for (oneLinkObjDescription in oneConfClassObj.linkObjects.filter { it.keyType.lowercase() == "ingroup" }) {
+        for (oneLinkObjDescription in oneConfClassObj.linkObjects) {
+
+            var sqlQueryLinkObjDeclare = ""
+            var sqlQueryLinkObjInit = ""
+            var sqlQueryLinkObject = ""
+            //var cntVar = sqlQueryConditionArray[3].toInt() // счетчик для наименования переменных
+            //var isChildLinkObjectFindInFile = sqlQueryConditionArray[4]
+            var isChildLinkObjectFindInFile = 1
+            sqlQueryConditionArray[3] = "1"
 
             // класс ссылки
             val oneLinkObjClass = jsonConfigFile.objects.find { it.code == oneLinkObjDescription.codeRef }!!
+
+            // для случая вхождения одного linkObject в другой linkObject (например, txnRule->txnActRule(linkObject)->txnFeeRule(linkObject))
+            // необходимо поменять ссылочное поле txn_rule_action_id в объекте txnFeeRule, указывающее на linkObject txnActRule верхнего уровня,
+            //   т.к. раньше при вызове setNewIdRefFields новый ид был неизвестен
+            if (idObjectInDB != "-") {
+                for (oneLinkObject in oneLoadObject.row.linkObjects.filter { it.code == oneLinkObjClass.code }) {
+                    val indexOfRefField =
+                        oneLinkObject.row.fields.indexOfFirst { it.fieldName == oneLinkObjDescription.refField }
+                    if (oneLinkObject.row.fields[indexOfRefField].fieldValue != idObjectInDB && oneLinkObjDescription.keyType.lowercase() != "out") {
+                        oneLinkObject.row.fields[indexOfRefField].fieldValue = idObjectInDB
+                    }
+                }
+            }
 
             // НЕЛЬЗЯ УДАЛЯТЬ ЗАПИСИ ПРОСТАВЛЯЯ 'R'. НЕ УДАЛЯТЬ
             //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1135,9 +1181,9 @@ object CheckObject {
                     val idValue = queryResult.getString(1)
 
                     // название переменной для значения сиквенса
-                    val nextValueRevLinkName = "nextValueRevLink$cntVar"
+                    val nextValueRevLinkName = "nextValueRevLink$cntForLinkObInQuery"
                     // увеличение счетчика переменных
-                    cntVar++
+                    cntForLinkObInQuery++
                     // объявление переменных для значений сиквенса в psql
                     sqlQueryLinkObjDeclare += "declare $nextValueRevLinkName integer; \n"
                     // инициализация переменных для сиквенса в psql
@@ -1211,6 +1257,19 @@ object CheckObject {
                     // сравниваю объект из бд приемника со всеми объектами linkObjects того же класса из загружаемого главного объекта oneLoadObject
                     for (oneLinkObject in oneLoadObject.row.linkObjects.filter { it.code == oneLinkObjClass.code }) {
 
+                        /*
+                                    if (checkLinkObjects(
+                                            oneLinkObject,
+                                            oneLinkObjClass,
+                                            //oneLoadObject,
+                                            linkObjectFieldsFromDB,
+                                            linkObjectFromDBId,
+                                            idObjectInDB
+                                        )
+                                    )
+                        */
+
+
                         // ид linkObject из файла
                         val linkObjectFromFileId =
                             oneLinkObject.row.fields.find { it.fieldName == oneLinkObjClass.keyFieldIn }!!.fieldValue!!
@@ -1252,17 +1311,14 @@ object CheckObject {
 
                             // Важно. Заменяю значение поля tariff_value.scale_component_id из файла на найденное значение из БД
                             val valueOfScaleComponentIdFieldFromDB =
-                                //linkObjectFieldsFromDB.find { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }?.fieldValue
                                 linkObjectFieldsFromDB.find { it.fieldName == scalable.scaleComponentFieldName }?.fieldValue
                             val indexOfScaleComponentIdField =
-                                //oneLinkObject.row.fields.indexOfFirst { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }
                                 oneLinkObject.row.fields.indexOfFirst { it.fieldName == scalable.scaleComponentFieldName }
                             if (indexOfScaleComponentIdField > -1) {
                                 oneLinkObject.row.fields[indexOfScaleComponentIdField].fieldValue =
                                     valueOfScaleComponentIdFieldFromDB
                             }
 
-                            //if (CheckObject().compareObjectRefTables(
                             if (compareObjectRefTables(
                                     linkObjectFromDBId,
                                     oneLinkObjClass,
@@ -1278,8 +1334,11 @@ object CheckObject {
 
                                 // проверяю есть ли шкала у тарифа в БД приемнике. если шкалы нет, значит объекты scaleObjects нужно добавить
                                 val loadObjectClass = jsonConfigFile.objects.find { it.code == oneLoadObject.code }!!
-                                val idScaleInDB = loadObject.findScaleIdInDB(loadObjectClass, idObjectInDB)
 
+                                var idScaleInDB = ""
+                                if (scalable.isClassHaveScale(loadObjectClass)) {
+                                    idScaleInDB = loadObject.findScaleIdInDB(loadObjectClass, idObjectInDB)
+                                }
                                 // поиск в БД приемнике scaleObjects и их сравнение с аналогичными объектами из файла
                                 if (idScaleInDB != "") {
                                     val linkObjectClass =
@@ -1295,24 +1354,38 @@ object CheckObject {
                                 }
 
                                 if (isIdenticalScale) {
-                                    listLinkObjNotToLoad.add(linkObjectFromFileId)
-                                    isLinkObjectFindInFile = true
-                                    logger.debug(
-                                        CommonFunctions().createObjectIdForLogMsg(
-                                            oneLinkObjClass.code,
-                                            oneLinkObjClass.keyFieldIn,
-                                            oneLinkObject.row.fields,
-                                            -1
-                                        ) + "The linkObject from file was found in database. The database linkObject ID <$linkObjectFromDBId>. It will not be added to the database."
+
+                                    // для вложенных linkObject проверяю только их наличие в БД, запросы для них не формирую
+                                    createLinkObjectsQuery(
+                                        oneLinkObject,
+                                        oneLinkObjClass,
+                                        jsonConfigFile,
+                                        linkObjectFromDBId,
+                                        levelLinkObject + 1,
+                                        sqlQueryConditionArray
                                     )
-                                    //break
+                                    isChildLinkObjectFindInFile = sqlQueryConditionArray[3].toInt()
+
+                                    if (isChildLinkObjectFindInFile == 1) {
+                                        listLinkObjNotToLoad.add(linkObjectFromFileId)
+                                        isLinkObjectFindInFile = true
+                                        logger.debug(
+                                            CommonFunctions().createObjectIdForLogMsg(
+                                                oneLinkObjClass.code,
+                                                oneLinkObjClass.keyFieldIn,
+                                                oneLinkObject.row.fields,
+                                                -1
+                                            ) + "The linkObject from file was found in database. The database linkObject ID <$linkObjectFromDBId>. It will not be added to the database."
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
 
                     // объект linkObjects из базы не найден среди загружаемых, поэтому проставим ему дату "По..." вчерашним числом
-                    if (!isLinkObjectFindInFile) {
+                    //if (!isLinkObjectFindInFile) {
+                    if (!isLinkObjectFindInFile && oneLinkObjDescription.keyType.lowercase() == "ingroup") {
 
                         logger.debug(
                             CommonFunctions().createObjectIdForLogMsg(
@@ -1326,9 +1399,9 @@ object CheckObject {
                         sqlQueryLinkObject += "\nupdate ${oneLinkObjClass.tableName} set valid_to=CURRENT_DATE-1 where ${oneLinkObjClass.keyFieldIn}=$linkObjectFromDBId; \n"
 
                         // название переменной для значения сиквенса
-                        val nextValueRevLinkName = "nextValueRevLink$cntVar"
+                        val nextValueRevLinkName = "nextValueRevLink$cntForLinkObInQuery"
                         // увеличение счетчика переменных
-                        cntVar++
+                        cntForLinkObInQuery++
                         // объявление переменных для значений сиквенса в psql
                         sqlQueryLinkObjDeclare += "declare $nextValueRevLinkName integer; \n"
                         // инициализация переменных для сиквенса в psql
@@ -1343,6 +1416,16 @@ object CheckObject {
                                 "insertAudSelectValue"
                             )
                     }
+
+                    // если для вложенного linkObject не нашли соответствия в бд, то выход.
+                    // запрос для такого linkObject будет сформирован при формировании запроса для linkObject верхнего уровня
+                    if (levelLinkObject > 1) {
+                        sqlQueryConditionArray[3] = if (isLinkObjectFindInFile) "1" else "0"
+                        if (!isLinkObjectFindInFile) {
+                            return
+                        }
+                    }
+
                 }
                 queryResult.close()
             }
@@ -1365,14 +1448,14 @@ object CheckObject {
                 )
 
                 // запрос для вставки scaleObject. должен быть перед формированием запроса на вставку linkObject (sqlQueryLinkObject),
-                //   т.к. внутри createScaleObjectsQuery генерится новый scale_component_id и сохраняется в linkObject из файла
-                //if (oneLinkObject.code.lowercase() == CommonConstants().TARIFF_VALUE_CLASS_NAME || oneLinkObject.code.lowercase() == CommonConstants().NUMBER_TARIFF_VALUE_CLASS_NAME) {
+                //   т.к. внутри createScaleObjectsQuery генерируется новый scale_component_id и сохраняется в linkObject из файла
                 if (scalable.isClassHaveScaleComponent(oneLinkObject)) {
-                    val listQueryCondition = createScaleObjectsQuery(oneLinkObject, jsonConfigFile, cntVar)
+                    //val listQueryCondition = createScaleObjectsQuery(oneLinkObject, jsonConfigFile, cntVar)
+                    val listQueryCondition = createScaleObjectsQuery(oneLinkObject, jsonConfigFile)
                     sqlQueryLinkObjDeclare += listQueryCondition[0]
                     sqlQueryLinkObjInit += listQueryCondition[1]
                     sqlQueryLinkObject += listQueryCondition[2]
-                    cntVar = listQueryCondition[3].toInt()
+                    //cntVar = listQueryCondition[3].toInt()
                 }
 
                 val idLinkObjectInDB = loadObject.nextSequenceValue(oneLinkObjClass.sequence)
@@ -1388,9 +1471,9 @@ object CheckObject {
                         )
 
                 // название переменной для значения сиквенса
-                val nextValueRevLinkName = "nextValueRevLink$cntVar"
+                val nextValueRevLinkName = "nextValueRevLink$cntForLinkObInQuery"
                 // увеличение счетчика переменных
-                cntVar++
+                cntForLinkObInQuery++
                 // объявление переменных для значений сиквенса в psql
                 sqlQueryLinkObjDeclare += "declare $nextValueRevLinkName integer; \n"
                 // инициализация переменных для сиквенса в psql
@@ -1416,21 +1499,40 @@ object CheckObject {
                             idLinkObjectInDB,
                             "refTables"
                         )
+
+                //if (index+1 == oneLoadObject.row.linkObjects.filter { it.code == oneLinkObjClass.code }.count()) {
+                sqlQueryConditionArray[0] += sqlQueryLinkObjDeclare
+                sqlQueryConditionArray[1] += sqlQueryLinkObjInit
+                sqlQueryConditionArray[2] += sqlQueryLinkObject
+                //sqlQueryConditionArray[3] = cntVar.toString()
+
+                sqlQueryLinkObjDeclare = ""
+                sqlQueryLinkObjInit = ""
+                sqlQueryLinkObject = ""
+
+                createLinkObjectsQuery(
+                    oneLinkObject,
+                    oneLinkObjClass,
+                    jsonConfigFile,
+                    idLinkObjectInDB,
+                    levelLinkObject + 1,
+                    sqlQueryConditionArray
+                )
             }
         }
 
-        return arrayOf(sqlQueryLinkObjDeclare, sqlQueryLinkObjInit, sqlQueryLinkObject)
+        //return arrayOf(sqlQueryLinkObjDeclare, sqlQueryLinkObjInit, sqlQueryLinkObject)
     }
 
     public fun createScaleObjectsQuery(
         oneLinkObject: DataDB,
         jsonConfigFile: RootCfg,
-        cntVariable: Int
+        //cntVariable: Int
     ): Array<String> {
 
         // нужно добавлять в БД приемник новые объекты шкалы
 
-        var cntVar = cntVariable
+        //var cntVar = cntVariable
         var sqlQueryScale = ""
         var sqlQueryScaleObjDeclare = ""
         var sqlQueryScaleObjInit = ""
@@ -1464,8 +1566,8 @@ object CheckObject {
                             )
 
                     // название переменной для значения сиквенса
-                    nextValueRevScaleName = "nextValueRevScale$cntVar"
-                    cntVar++
+                    nextValueRevScaleName = "nextValueRevScale$cntForLinkObInQuery"
+                    cntForLinkObInQuery++
 
                     // объявление переменных для значений сиквенса в psql
                     sqlQueryScaleObjDeclare += "declare $nextValueRevScaleName integer; \n"
@@ -1537,8 +1639,8 @@ object CheckObject {
                                                 "insert"
                                             )
 
-                                    nextValueRevScaleName = "nextValueRevScale$cntVar"
-                                    cntVar++
+                                    nextValueRevScaleName = "nextValueRevScale$cntForLinkObInQuery"
+                                    cntForLinkObInQuery++
 
                                     // объявление переменных для значений сиквенса в psql
                                     sqlQueryScaleObjDeclare += "declare $nextValueRevScaleName integer; \n"
@@ -1600,8 +1702,8 @@ object CheckObject {
                                                         "insert"
                                                     )
 
-                                            nextValueRevScaleName = "nextValueRevScale$cntVar"
-                                            cntVar++
+                                            nextValueRevScaleName = "nextValueRevScale$cntForLinkObInQuery"
+                                            cntForLinkObInQuery++
 
                                             // объявление переменных для значений сиквенса в psql
                                             sqlQueryScaleObjDeclare += "declare $nextValueRevScaleName integer; \n"
@@ -1624,7 +1726,8 @@ object CheckObject {
                 }
             }
 
-        return arrayOf(sqlQueryScaleObjDeclare, sqlQueryScaleObjInit, sqlQueryScale, cntVar.toString())
+        //return arrayOf(sqlQueryScaleObjDeclare, sqlQueryScaleObjInit, sqlQueryScale, cntVar.toString())
+        return arrayOf(sqlQueryScaleObjDeclare, sqlQueryScaleObjInit, sqlQueryScale)
     }
 
     // установка нового значения ссылочного поля в файле для референса типа refFields
@@ -1637,6 +1740,8 @@ object CheckObject {
         oneMainLoadObject: DataDB? // главный объект, по которому проверяются linkObject. Заполняется только если проверяется объект из linkObject
     ) {
         for (oneReferenceDescr in oneConfClassObj.refObjects) {
+
+            var isSetNullValue = false
 
             var idObjectInDB = "-"
             // название референсного поля
@@ -1654,7 +1759,18 @@ object CheckObject {
                 // Тем не менее нужно получить ид этого tariff_id в бд приемнике
                 val oneMainLoadObjClass = jsonConfigFile.objects.find { it.code == oneMainLoadObject.code }!!
                 // поиск id референсного объекта в бд приемнике
-                idObjectInDB = loadObject.getObjIdInDB(oneMainLoadObject.row.fields, oneMainLoadObjClass, 0, true)
+                if (oneMainLoadObjClass.keyFieldOut == "") {
+                    // случай вхождения одного linkObject в другой linkObject (например, txnRule->txnActRule(linkObject)->txnFeeRule(linkObject))
+                    // необходимо поменять ссылочное поле txn_rule_action_id в объекте txnFeeRule, указывающее на linkObject txnActRule верхнего уровня,
+                    //   но здесь это сделать нельзя, т.к. новый ид неизвестен. Замена будет произведена createLinkObjectsQuery
+                    idObjectInDB = "-"
+                    isSetNullValue = true
+                    //idObjectInDB =
+                    //    oneMainLoadObject.row.fields.find { it.fieldName == oneMainLoadObjClass.keyFieldIn }!!.fieldValue!!
+
+                } else {
+                    idObjectInDB = loadObject.getObjIdInDB(oneMainLoadObject.row.fields, oneMainLoadObjClass, 0, true)
+                }
             } else if (oneRefObject == null) {
                 continue
             } else if (oneRefObject.typeRef.lowercase() == "inchild") {
@@ -1667,7 +1783,7 @@ object CheckObject {
             }
 
             // для референса inchild нужно записать значение null, т.к. реальное значение еще неизвестно
-            if (idObjectInDB == "-" && oneRefObject!!.typeRef.lowercase() != "inchild") {
+            if (idObjectInDB == "-" && !isSetNullValue && oneRefObject!!.typeRef.lowercase() != "inchild") {
                 logger.error(
                     CommonFunctions().createObjectIdForLogMsg(
                         oneConfClassObj.code,
@@ -1683,7 +1799,7 @@ object CheckObject {
 
             // установка нового значения референса
             val indexOfRefField = oneLoadObjFields.indexOfFirst { it.fieldName == refField }
-            if (idObjectInDB == "-" && oneRefObject != null && oneRefObject.typeRef.lowercase() == "inchild") {
+            if (idObjectInDB == "-" && ((oneRefObject != null && oneRefObject.typeRef.lowercase() == "inchild") || (isSetNullValue))) {
                 oneLoadObjFields[indexOfRefField].fieldValue = null
             } else if (oneLoadObjFields[indexOfRefField].fieldValue != idObjectInDB && oneReferenceDescr.keyType.lowercase() != "out") {
                 oneLoadObjFields[indexOfRefField].fieldValue = idObjectInDB
@@ -1770,5 +1886,94 @@ object CheckObject {
         }
     }
 
+    // рекурсивная проверка цикличности ссылок объектов linkObjects
+    private fun bypassLinkObjCheckRing(oneCheckObject: DataDB, chainCheckObject: MutableList<DataDB>) {
+
+        for (oneCheckLinkObj in oneCheckObject.row.linkObjects) {
+            var oneConfCheckObj = jsonConfigFile.objects.find { it.code == oneCheckLinkObj.code }!!
+            chainCheckObject.add(oneCheckLinkObj)
+            checkRingReference(chainCheckObject, oneConfCheckObj, jsonConfigFile, allCheckObject.element)
+
+            // цикл по объектам scaleObjects
+            oneCheckLinkObj.row.scaleObjects.let { scaleObjects ->
+                for (oneCheckScaleObj in scaleObjects) {
+                    oneConfCheckObj = jsonConfigFile.objects.find { it.code == oneCheckScaleObj.code }!!
+                    chainCheckObject.add(oneCheckScaleObj)
+                    checkRingReference(chainCheckObject, oneConfCheckObj, jsonConfigFile, allCheckObject.element)
+                }
+            }
+            bypassLinkObjCheckRing(oneCheckLinkObj, chainCheckObject)
+        }
+
+    }
+
+    // рекурсивная проверка ссылок объектов linkObjects
+    private fun bypassLinkObjCheckOther(oneCheckObject: DataDB) {
+
+        // цикл по объектам linkObjects
+        for (oneCheckLinkObj in oneCheckObject.row.linkObjects) {
+            checkOneObject(oneCheckLinkObj, jsonConfigFile, allCheckObject.element)
+
+            // цикл по объектам scaleObjects
+            oneCheckLinkObj.row.scaleObjects.let { scaleObjects ->
+                for (oneCheckScaleObj in scaleObjects) {
+                    checkOneObject(oneCheckScaleObj, jsonConfigFile, allCheckObject.element)
+                }
+            }
+            bypassLinkObjCheckOther(oneCheckLinkObj)
+        }
+    }
+
+    // рекурсивная установка новых значений ссылок типа fieldJson объектов linkObjects
+    private fun bypassLinkObjSetNewIdFieldJson(oneCheckObject: DataDB) {
+
+        // цикл по объектам linkObjects
+        for (oneLinkObject in oneCheckObject.row.linkObjects) {
+            var oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneLinkObject.code }!!
+            setNewIdFieldJson(
+                oneLinkObject.row.fields,
+                oneLinkObject.row.refObject,
+                oneConfClassRefObj,
+                jsonConfigFile
+            )
+            for (oneScaleObject in oneLinkObject.row.scaleObjects) {
+                oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneScaleObject.code }!!
+                setNewIdFieldJson(
+                    oneScaleObject.row.fields,
+                    oneScaleObject.row.refObject,
+                    oneConfClassRefObj,
+                    jsonConfigFile
+                )
+            }
+            bypassLinkObjSetNewIdFieldJson(oneLinkObject)
+        }
+    }
+
+    // рекурсивная установка новых значений ссылок типа refField объектов linkObjects
+    private fun bypassLinkObjSetNewIdRefField(oneCheckObject: DataDB) {
+
+        // цикл по объектам linkObjects
+        for (oneLinkObject in oneCheckObject.row.linkObjects) {
+            var oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneLinkObject.code }!!
+            setNewIdRefFields(
+                oneLinkObject.row.fields,
+                oneLinkObject.row.refObject,
+                oneConfClassRefObj,
+                jsonConfigFile,
+                oneCheckObject
+            )
+            for (oneScaleObject in oneLinkObject.row.scaleObjects) {
+                oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneScaleObject.code }!!
+                setNewIdRefFields(
+                    oneScaleObject.row.fields,
+                    oneScaleObject.row.refObject,
+                    oneConfClassRefObj,
+                    jsonConfigFile,
+                    oneCheckObject
+                )
+            }
+            bypassLinkObjSetNewIdRefField(oneLinkObject)
+        }
+    }
 
 }

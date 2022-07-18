@@ -156,20 +156,23 @@ class ReaderDB {
                 val oneConfigClass =
                     jsonConfigFile.objects.find { it.code == includeClass.code && it.keyFieldOut != "" }
                 if (oneConfigClass != null) {
-                    readOneObject(null, oneConfigClass, jsonConfigFile, false, "")
+                    //readOneObject(null, oneConfigClass, jsonConfigFile, false, "")
+                    readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
                 }
             }
             // если задан массив exclude с пустым полем filterObjects, то объекты классов указанные в нем исключаются из выгрузки
         } else if (jsonConfigFilterFile != null && jsonConfigFilterFile.exclude.isNotEmpty()) {
             for (oneConfigClass in jsonConfigFile.objects.filter { it.keyFieldOut != "" }) {
                 if (jsonConfigFilterFile.exclude.find { it.code == oneConfigClass.code && it.filterObjects == "" } == null) {
-                    readOneObject(null, oneConfigClass, jsonConfigFile, false, "")
+                    //readOneObject(null, oneConfigClass, jsonConfigFile, false, "")
+                    readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
                 }
             }
             // если массив include и массив exclude пустые или файл фильтров не указан
         } else {
             for (oneConfigClass in jsonConfigFile.objects.filter { it.keyFieldOut != "" }) {
-                readOneObject(null, oneConfigClass, jsonConfigFile, false, "")
+                //readOneObject(null, oneConfigClass, jsonConfigFile, false, "")
+                readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
             }
         }
         conn.close()
@@ -223,7 +226,8 @@ class ReaderDB {
         for (oneTaskObject in jsonTaskFile.element) {
             val oneConfigClass =
                 jsonConfigFile.objects[jsonConfigFile.objects.indexOfFirst { it.code == oneTaskObject.code }]
-            readOneObject(oneTaskObject, oneConfigClass, jsonConfigFile, false, "")
+            //readOneObject(oneTaskObject, oneConfigClass, jsonConfigFile, false, "")
+            readOneObject(oneTaskObject, oneConfigClass, jsonConfigFile, "", 0)
 
             if (false) {
                 // цикл по linkObjects с keyType=In объекта из файла заданий и добавление linkObjects в файл выгрузки как главных объектов
@@ -259,8 +263,9 @@ class ReaderDB {
         oneTaskObject: TaskFileFields?,
         oneConfigClass: ObjectCfg,
         jsonConfigFile: RootCfg,
-        isSaveLinkObject: Boolean, // режим выгрузки массива linkObjects. Может принимать true только в режиме save, при выгрузке объектов linkObjects
-        scaleQuery: String // Заполняется в случаи выгрузки шкал, в остальных случаях пусто. может быть заполнено только в режиме save
+        //isSaveLinkObject: Boolean, // режим выгрузки массива linkObjects. Может принимать true только в режиме save, при выгрузке объектов linkObjects
+        scaleQuery: String, // Заполняется в случаи выгрузки шкал, в остальных случаях пусто. может быть заполнено только в режиме save
+        linkObjectLevel: Int = 0 // признак выгрузки массива linkObjects. Может принимать true только в режиме save, при выгрузке объектов linkObjects.
     ) {
 
         // чтение таблицы
@@ -271,7 +276,8 @@ class ReaderDB {
                 oneConfigClass,
                 oneTaskObject,
                 jsonConfigFile,
-                isSaveLinkObject
+                //isSaveLinkObject,
+                linkObjectLevel
             )
         }
         logger.trace(
@@ -281,7 +287,8 @@ class ReaderDB {
         val queryStatement = conn.prepareStatement(sqlQuery)
         val queryResult = queryStatement.executeQuery()
 
-        if (!queryResult.isBeforeFirst && REGIM == CommonConstants().REGIM_CREATE_OBJFILE && !isSaveLinkObject) {
+        //if (!queryResult.isBeforeFirst && REGIM == CommonConstants().REGIM_CREATE_OBJFILE && !isSaveLinkObject) {
+        if (!queryResult.isBeforeFirst && REGIM == CommonConstants().REGIM_CREATE_OBJFILE && linkObjectLevel == 0) {
             logger.error(
                 CommonFunctions().createObjectIdForLogMsg(
                     oneConfigClass.code,
@@ -311,8 +318,11 @@ class ReaderDB {
             // рекурсивный поиск и запись ссылочных объектов в список tblRefObject
             if (REGIM == CommonConstants().REGIM_CREATE_OBJFILE) {
 
-                readRefObject(oneConfigClass, jsonConfigFile, tblFields, isSaveLinkObject, 1)
-                if (!isSaveLinkObject && scaleQuery == "") {
+                //readRefObject(oneConfigClass, jsonConfigFile, tblFields, isSaveLinkObject, 1)
+                readRefObject(oneConfigClass, jsonConfigFile, tblFields, linkObjectLevel, 1)
+
+                //if (!isSaveLinkObject && scaleQuery == "") {
+                if (linkObjectLevel == 0 && scaleQuery == "") {
                     tblMain.add(
                         DataDB(
                             oneConfigClass.code,
@@ -322,20 +332,37 @@ class ReaderDB {
                     )
                     tblRefObject = mutableListOf<RefObject>()
                 }
-                readLinkObjectInGroup(oneConfigClass, jsonConfigFile, tblFields)
-                if (isSaveLinkObject) {
-                    tblLinkObject.add(
+
+                if (linkObjectLevel > 0) {
+                    val dataDBObject = DataDB(
+                        oneConfigClass.code,
+                        oneTaskObject!!.loadMode,
+                        Row(tblFields, tblRefObject, listOf<DataDB>(), listOf<DataDB>())
+                    )
+
+                    if (tblLinkObject.isEmpty()) {
+                        tblLinkObject.add(dataDBObject)
+                    } else {
+                        tblLinkObject[tblLinkObject.lastIndex].row.linkObjects += dataDBObject
+                    }
+                    tblRefObject = mutableListOf<RefObject>()
+                }
+                readLinkObjectInGroup(oneConfigClass, jsonConfigFile, tblFields, linkObjectLevel)
+                //if (isSaveLinkObject) {
+                //if (linkObjectLevel > 0) {
+                if (linkObjectLevel == 1) {
+                    /*tblLinkObject.add(
                         DataDB(
                             oneConfigClass.code,
                             oneTaskObject!!.loadMode,
                             Row(tblFields, tblRefObject, listOf<DataDB>(), listOf<DataDB>())
                         )
-                    )
+                    )*/
                     tblMain[tblMain.lastIndex].row.linkObjects += tblLinkObject
                     tblLinkObject = mutableListOf<DataDB>()
                     tblRefObject = mutableListOf<RefObject>()
-
                 }
+
                 // выгрузка тарифных шкал. шкалы выгружаются только для родительского класса numberTariffValue и tariffValue
                 readScaleObject(oneConfigClass, jsonConfigFile, tblFields, "Read", listOf<DataDB>())
                 if (scaleQuery != "") {
@@ -386,13 +413,15 @@ class ReaderDB {
         jsonCfgOneObj: ObjectCfg,       // один класс из конфига
         jsonCfgAllObj: RootCfg,         // все классы из конфига
         tblFieldsOneObj: List<Fields>,  // список полей объекта класса jsonCfgOneObj в виде {название поля, значение поля}
-        isSaveLinkObject: Boolean,      // режим выгрузки массива linkObjects
-        nestedLevel: Int                // уровень вложенности ссылочного объекта
+        //isSaveLinkObject: Boolean,      // режим выгрузки массива linkObjects
+        linkObjectLevel: Int,
+        nestedLevel: Int,               // уровень вложенности ссылочного объекта
     ) {
 
         // формирование однородного списка референсов для разных типов списков(списки refObjects, refFieldsJson, refTables)
         val refObjects =
-            createListToFindRefObjects(jsonCfgOneObj, tblFieldsOneObj, jsonCfgAllObj, isSaveLinkObject, nestedLevel)
+            //createListToFindRefObjects(jsonCfgOneObj, tblFieldsOneObj, jsonCfgAllObj, isSaveLinkObject, nestedLevel)
+            createListToFindRefObjects(jsonCfgOneObj, tblFieldsOneObj, jsonCfgAllObj, nestedLevel, linkObjectLevel)
 
         // цикл по ссылкам класса
         for (itemRefObject in refObjects) {
@@ -498,11 +527,18 @@ class ReaderDB {
 
                         // ограничение рекурсии
                         if (nestedLevel < CommonConstants().NESTED_LEVEL_REFERENCE) {
-                            readRefObject(
+                            /*readRefObject(
                                 jsonConfigObject,
                                 jsonCfgAllObj,
                                 tblFields,
                                 isSaveLinkObject,
+                                nestedLevel + 1
+                            )*/
+                            readRefObject(
+                                jsonConfigObject,
+                                jsonCfgAllObj,
+                                tblFields,
+                                linkObjectLevel,
                                 nestedLevel + 1
                             )
                         }
@@ -565,7 +601,8 @@ class ReaderDB {
         oneConfigClass: ObjectCfg,
         oneTaskObject: TaskFileFields?,
         jsonConfigFile: RootCfg,
-        isSaveLinkObject: Boolean
+        //isSaveLinkObject: Boolean,
+        linkObjectLevel: Int
     ): String {
 
         val tableName = oneConfigClass.tableName
@@ -590,12 +627,14 @@ class ReaderDB {
 
         if (REGIM == CommonConstants().REGIM_CREATE_OBJFILE) {
 
-            if (isSaveLinkObject) {
+            //if (isSaveLinkObject ) {
+            if (linkObjectLevel > 0) {
                 val mainObjClass = jsonConfigFile.objects.find { it.code == oneTaskObject!!.code }!!
                 val mainObjId =
                     oneTaskObject!!.keyFieldIn.find { it.fieldName == mainObjClass.keyFieldIn }!!.fieldValue
 
-                for (item in mainObjClass.linkObjects.filter { (it.keyType.lowercase() == "ingroup") && it.codeRef == oneConfigClass.code }) {
+                //for (item in mainObjClass.linkObjects.filter { (it.keyType.lowercase() == "ingroup") && it.codeRef == oneConfigClass.code }) {
+                for (item in mainObjClass.linkObjects.filter { it.codeRef == oneConfigClass.code }) {
                     val linkFieldForMainTable = item.refField
                     dopCondForLinkObjId = " and $linkFieldForMainTable=$mainObjId "
                     break
@@ -609,13 +648,14 @@ class ReaderDB {
         // При формировании файла задания для объекта с настроенным списком подчиненных объектов linkObjects с типом "keyType": "InGroup"
         //  необходимо проверять по auditDateField вместе с родительским все подчиненные объекты.
         //  Родительский объект попадает в файл задания если был изменен хотя бы один из подчиненных.
-        if (oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" }.isNotEmpty()
-        ) {
+        //if (oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" }.isNotEmpty()
+        if (oneConfigClass.linkObjects.isNotEmpty() && linkObjectLevel == 0) {
             sqlQuery =
                 "\nselect * from  $tableName where audit_state = 'A' $filterObjCond and ${oneConfigClass.keyFieldIn} in (\n "
             sqlQuery += "select ${oneConfigClass.keyFieldIn} from $tableName where audit_state = 'A' $auditDateObjCond $filterObjCond $dopCondForMainObjId\n "
 
-            for (oneCfgLinkObj in oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" }) {
+            //for (oneCfgLinkObj in oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" }) {
+            for (oneCfgLinkObj in oneConfigClass.linkObjects) {
 
                 val oneCfgLinkObjClass = jsonConfigFile.objects.find { it.code == oneCfgLinkObj.codeRef }!!
 
@@ -631,7 +671,8 @@ class ReaderDB {
                     val mainObjId =
                         oneTaskObject!!.keyFieldIn.find { it.fieldName == mainObjClass.keyFieldIn }!!.fieldValue
 
-                    for (item in mainObjClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" && it.codeRef == oneCfgLinkObjClass.code }) {
+                    //for (item in mainObjClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" && it.codeRef == oneCfgLinkObjClass.code }) {
+                    for (item in mainObjClass.linkObjects.filter { it.codeRef == oneCfgLinkObjClass.code }) {
                         val linkFieldForMainTable = item.refField
                         dopCondForLinkObjId = " and $linkFieldForMainTable=$mainObjId "
                         break
@@ -745,8 +786,9 @@ class ReaderDB {
         jsonCfgOneObj: ObjectCfg,
         tblFieldsOneObj: List<Fields>,
         jsonCfgAllObj: RootCfg,
-        isSaveLinkObject: Boolean,
-        nestedLevel: Int
+        //isSaveLinkObject: Boolean,
+        nestedLevel: Int,
+        linkObjectLevel: Int
     ): List<RefObjects> {
 
         val refObjects = mutableListOf<RefObjects>()
@@ -762,11 +804,15 @@ class ReaderDB {
             }
         }
         for (itemRefObject in listItemRefObject) {
-            //for (itemRefObject in jsonCfgOneObj.refObjects) {
+
             // при выгрузке объектов linkObjects не обрабатываем референсы на главный объект(тот, по которому выгружаем linkObjects), иначе будет кольцо
-            if (isSaveLinkObject && itemRefObject.codeRef == tblMain[tblMain.lastIndex].code) {
+            //if (isSaveLinkObject && itemRefObject.codeRef == tblMain[tblMain.lastIndex].code) {
+            if (linkObjectLevel > 0 &&
+                (itemRefObject.codeRef == tblMain.last().code ||
+                        (tblLinkObject.isNotEmpty() && tblLinkObject.last().code == itemRefObject.codeRef))) {
                 continue
             }
+
             if (itemRefObject.keyType.lowercase() == "out" && itemRefObject.refField.contains(",")) {
                 logger.error(
                     CommonFunctions().createObjectIdForLogMsg(
@@ -1033,23 +1079,30 @@ class ReaderDB {
     private fun readLinkObjectInGroup(
         oneConfigClass: ObjectCfg,     // один класс из конфига
         jsonConfigFile: RootCfg,       // все классы из конфига
-        tblFieldsOneObj: List<Fields>  // список полей объекта класса jsonCfgOneObj в виде {название поля, значение поля}
+        tblFieldsOneObj: List<Fields>,  // список полей объекта класса jsonCfgOneObj в виде {название поля, значение поля}
+        linkObjectLevel: Int,
     ) {
 
         if (oneConfigClass.linkObjects.isNotEmpty()) {
-            for (oneCfgLinkObj in oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" }) {
+            //for (oneCfgLinkObj in oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" || it.keyType.lowercase() == "in" }) {
+            for (oneCfgLinkObj in oneConfigClass.linkObjects) {
                 val oneCfgLinkObjClass = jsonConfigFile.objects.find { it.code == oneCfgLinkObj.codeRef }!!
 
                 taskFileFields = mutableListOf<TaskFileFields>()
 
                 val lstKeyFieldInValue =
                     getOneFieldFromRefField(tblFieldsOneObj, oneConfigClass, oneConfigClass.keyFieldIn)
-                val lstKeyFieldOutValue =
-                    getOneFieldFromRefField(tblFieldsOneObj, oneConfigClass, oneConfigClass.keyFieldOut)
+                // у вложенного linkobject может быть пустое keyFieldOut, в этом случае его не обрабатываем
+                var lstKeyFieldOutValue = listOf<Fields>()
+                if (linkObjectLevel == 0 || oneConfigClass.keyFieldOut != "") {
+                    lstKeyFieldOutValue =
+                        getOneFieldFromRefField(tblFieldsOneObj, oneConfigClass, oneConfigClass.keyFieldOut)
+                }
                 val taskObject =
                     TaskFileFields(oneConfigClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
 
-                readOneObject(taskObject, oneCfgLinkObjClass, jsonConfigFile, true, "")
+                //readOneObject(taskObject, oneCfgLinkObjClass, jsonConfigFile, true, "", linkObjectLevel + 1)
+                readOneObject(taskObject, oneCfgLinkObjClass, jsonConfigFile, "", linkObjectLevel + 1)
             }
         }
 
@@ -1101,7 +1154,8 @@ class ReaderDB {
                     TaskFileFields(oneConfigClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
                 if (objectEvent == "Read") {
                     taskFileFields = mutableListOf<TaskFileFields>()
-                    readOneObject(taskObject, scaleComponentClass, jsonConfigFile, false, sqlQuery)
+                    //readOneObject(taskObject, scaleComponentClass, jsonConfigFile, false, sqlQuery)
+                    readOneObject(taskObject, scaleComponentClass, jsonConfigFile, sqlQuery, 0)
                 } else if (objectEvent == "Load") {
 
                     // проверка scaleObjects
@@ -1138,7 +1192,8 @@ class ReaderDB {
 
                         if (objectEvent == "Read") {
                             taskFileFields = mutableListOf<TaskFileFields>()
-                            readOneObject(taskObject, scaleComponentValueClass, jsonConfigFile, false, sqlQuery)
+                            //readOneObject(taskObject, scaleComponentValueClass, jsonConfigFile, false, sqlQuery)
+                            readOneObject(taskObject, scaleComponentValueClass, jsonConfigFile, sqlQuery, 0)
                         } else if (objectEvent == "Load") {
 
                             // проверка scaleObjects
@@ -1175,7 +1230,8 @@ class ReaderDB {
 
                                 if (objectEvent == "Read") {
                                     taskFileFields = mutableListOf<TaskFileFields>()
-                                    readOneObject(taskObject, scaleAmountClass, jsonConfigFile, false, sqlQuery)
+                                    //readOneObject(taskObject, scaleAmountClass, jsonConfigFile, false, sqlQuery)
+                                    readOneObject(taskObject, scaleAmountClass, jsonConfigFile, sqlQuery, 0)
                                 } else if (objectEvent == "Load") {
 
                                     // проверка scaleObjects
@@ -1213,7 +1269,7 @@ class ReaderDB {
 
         /*
         При выгрузке данных может возникнуть необходимость выгрузить все(или все измененные) объекты определенного типа.
-        Например, все тарифы относящиеся к указанной тарифной группе. Если формировать файл задания в режиме -dc получаем все измненные объекты
+        Например, все тарифы относящиеся к указанной тарифной группе. Если формировать файл задания в режиме -dc получаем все измененные объекты
         описанные в файле конфигурации. В некоторых случаях может быть неудобно.
         Предлагается:
         анализировать связь linkObjects.keyType=In, только в случае указания в файле задания режима "loadMode": "Safe.linkObjects"
@@ -1305,7 +1361,8 @@ class ReaderDB {
             val taskObject =
                 TaskFileFields(oneLinkObjectInClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
 
-            readOneObject(taskObject, oneLinkObjectInClass, jsonConfigFile, false, "")
+            //readOneObject(taskObject, oneLinkObjectInClass, jsonConfigFile, false, "")
+            readOneObject(taskObject, oneLinkObjectInClass, jsonConfigFile, "", 0)
         }
         queryFieldValue.close()
     }

@@ -20,8 +20,8 @@ public var CONFIG_FILE = ""
 public var TASK_FILE = ""
 public var OBJECT_FILE = ""
 public var FILTER_FILE = ""
+//public var DATASOURCES_FILE = ""
 public var AUDIT_DATE = ""
-//private val LOGBACK_FILE_PATH = "config\\logback.xml"
 private val LOGBACK_FILE_PATH = "config/logback.xml"
 
 // Класс описывает действия с объектом при проверке/загрузке
@@ -41,6 +41,25 @@ data class ActionWithObject(
     var actionSkip: Boolean
 )
 
+// Класс описывает файл с настройкой соединений с источниками данных
+data class DataSources(
+    val dataSources: List<DataSource>
+)
+
+// Класс настройку соединения с источниками данных
+data class DataSource(
+    val aliasDb: String,
+    val jdbcUrl: String,
+    val username: String,
+    val password: String?,
+    val encryptedPassword: String?,
+    val pswComponent1: String?,
+    val pswComponent2: String?
+)
+
+// список настроек с источниками данных
+public lateinit var dataSourcesSettings : DataSources
+
 class CommonConstants {
 
     // версия программы
@@ -49,22 +68,11 @@ class CommonConstants {
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2
 
-    //val SCALE_ID_FIELD_NAME = "scale_id"
-    //val SCALE_COMPONENT_ID_FIELD_NAME = "scale_component_id"
-    //val TARIFF_CLASS_NAME = "tariff"
-    //val TARIFF_VALUE_CLASS_NAME = "tariffvalue"
-    //val NUMBER_TARIFF_VALUE_CLASS_NAME = "numbertariffvalue"
-    //val SCALE_COMPONENT_CLASS_NAME = "scalecomponent"
-    //val SCALE_COMPONENT_VALUE_CLASS_NAME = "scalecomponentvalue"
-    //val SCALE_AMOUNT_CLASS_NAME = "scalableamount"
-    //val SCALE_CLASS_NAME = "scale"
-
     // массив полей, которые не выгружаются из БД
     val FIELDS_NOT_EXPORT = arrayOf(
         "audit_date",
         "audit_state",
         "audit_user_id",
-        //"scale_id",
         "@isLoad"   // это не колонка из таблицы, это поле используется для проверки загружен объект в базу или нет
     )
 
@@ -80,6 +88,7 @@ class CommonConstants {
         "-w",   // Имя файла задания
         "-r",   // Имя файла результата
         "-f",   // Имя файла фильтра
+        //"-dbs", // Имя файла с настройкой источников данных
         "-d"    // Дата в формате YYYY-MM-DD HH:MM:SS
     )
 
@@ -97,8 +106,6 @@ fun main(args: Array<String>) {
     val logger = LoggerFactory.getLogger("Main")
 
     if (File(LOGBACK_FILE_PATH).exists()) {
-        //logger.error("Not found logback.xml file on the path <$LOGBACK_FILE_PATH>")
-        //exitProcess(-1)
 
         val context = LoggerFactory.getILoggerFactory() as LoggerContext
         try {
@@ -110,17 +117,15 @@ fun main(args: Array<String>) {
             println("JoranException : $e")
             exitProcess(-1)
         }
-        //StatusPrinter.printInCaseOfErrorsOrWarnings(context);
+
     }
 
-    //val logger = LoggerFactory.getLogger("Main")
     logger.info("SOLAR DataBase Copy Configuration Tool " + CommonConstants().VERSION)
 
     var argsString = " "
     for (arg in args) {
         argsString += "$arg "
     }
-    //logger.info("Argument string: $argsString")
 
     val dbUpdateService = DBUpdateService()
     dbUpdateService.setInputArgs(args)
@@ -129,6 +134,11 @@ fun main(args: Array<String>) {
     if (REGIM == CommonConstants().REGIM_CREATE_OBJFILE || REGIM == CommonConstants().REGIM_CREATE_TASKFILE ||
         REGIM == CommonConstants().REGIM_CHECK_OBJFILE || REGIM == CommonConstants().REGIM_LOAD_OBJFILE
     ) {
+
+        val readJsonFile = ReadJsonFile()
+        /*if (DATASOURCES_FILE != "") {
+            dataSourcesSettings = readJsonFile.readDataSources()
+        }*/
 
         // режим создания файла задания
         if (REGIM == CommonConstants().REGIM_CREATE_TASKFILE) {
@@ -154,7 +164,7 @@ fun main(args: Array<String>) {
         if (REGIM == CommonConstants().REGIM_CHECK_OBJFILE) {
 
             // считывание файла объектов
-            val readJsonFile = ReadJsonFile()
+            //val readJsonFile = ReadJsonFile()
             val allDataObject = readJsonFile.readObject()
 
             // действие при загрузке для каждого объекта из файла: добавление/обновление/пропуск
@@ -185,7 +195,7 @@ fun main(args: Array<String>) {
         // режим загрузки файла объектов
         if (REGIM == CommonConstants().REGIM_LOAD_OBJFILE) {
             // считывание файла объектов
-            val readJsonFile = ReadJsonFile()
+            //val readJsonFile = ReadJsonFile()
             val allDataObject = readJsonFile.readObject()
 
             // действие при загрузке для каждого объекта из файла: добавление/обновление/пропуск
@@ -259,18 +269,6 @@ class DBUpdateService {
         for (arg in args) {
             when (arg) {
                 "-m" -> REGIM = args[args.indexOf(arg) + 1]
-                /*"-c" -> {
-                    val arrConn = args[args.indexOf(arg) + 1].split(" ")
-                    CONN_STRING = arrConn[0]
-                    if (arrConn.size > 1) {
-                        CONN_LOGIN = arrConn[1]
-                    }
-                    if (arrConn.size > 2) {
-                        CONN_PASS = arrConn[2]
-
-                        //println(PasswordEncryptor.decrypt("5ghJMCUNnlCwLq4/mY9blw==;/4lq1mJbMTYQOjiYY9qziw=="))
-                    }
-                }*/
                 "-url" -> CONN_STRING = args[args.indexOf(arg) + 1]
                 "-username" -> CONN_LOGIN = args[args.indexOf(arg) + 1]
                 "-password" -> {
@@ -305,6 +303,7 @@ class DBUpdateService {
                 "-w" -> TASK_FILE = args[args.indexOf(arg) + 1].lowercase()
                 "-r" -> OBJECT_FILE = args[args.indexOf(arg) + 1].lowercase()
                 "-f" -> FILTER_FILE = args[args.indexOf(arg) + 1].lowercase()
+                //"-dbs" -> DATASOURCES_FILE = args[args.indexOf(arg) + 1].lowercase()
                 "-d" -> AUDIT_DATE = args[args.indexOf(arg) + 1]
             }
         }
