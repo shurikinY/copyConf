@@ -1,5 +1,8 @@
 package com.solanteq.service
 
+import org.slf4j.LoggerFactory
+import kotlin.system.exitProcess
+
 class CommonFunctions {
 
     // формирует стандартную часть сообщения для лога:
@@ -36,7 +39,7 @@ class CommonFunctions {
     // поиск значений полей из keyFieldOut в списке fields закачиваемого объекта (поиск в файле)
     // например, для keyFieldOut="code,numeric_code" вернет "RUR,810"
     // если значение одного из полей указанных в keyFieldOut будет null, то вылетаем с exception
-    private fun findValuesForKeyFieldOut(
+    fun findValuesForKeyFieldOut(
         objFieldsList: List<Fields>,
         keyFieldOut: String
     ): String {
@@ -54,11 +57,47 @@ class CommonFunctions {
     }
 
     // формирования списка полей, которые не нужно выгружать, для каждого класса
-    public fun createListFieldsNotExport(jsonConfigFile : RootCfg) {
+    public fun createListFieldsNotExport(jsonConfigFile: RootCfg) {
         // формирую список полей для исключения в каждом классе конфигурации
         for (item in jsonConfigFile.objects) {
             for (field in CommonConstants().FIELDS_NOT_EXPORT) {
                 item.fieldsNotExport.add(FieldsNotExport(field))
+            }
+        }
+    }
+
+    public fun checkObjectClass(allCheckObject: DataDBMain, jsonConfigFile: RootCfg, classCode:String) {
+        val logger = LoggerFactory.getLogger(classCode)
+
+        for (oneCheckObject in allCheckObject.element) {
+            if (jsonConfigFile.objects.find { it.code == oneCheckObject.code } == null) {
+                logger.error(
+                    CommonFunctions().createObjectIdForLogMsg(
+                        oneCheckObject.code,
+                        "",
+                        null,
+                        -1
+                    ) + "There is no description of class in configuration file."
+                )
+                exitProcess(-1)
+            }
+        }
+    }
+
+    public fun checkObjectClass(allCheckObject: TaskFileFieldsMain, jsonConfigFile: RootCfg, classCode:String) {
+        val logger = LoggerFactory.getLogger(classCode)
+
+        for (oneCheckObject in allCheckObject.element) {
+            if (jsonConfigFile.objects.find { it.code == oneCheckObject.code } == null) {
+                logger.error(
+                    CommonFunctions().createObjectIdForLogMsg(
+                        oneCheckObject.code,
+                        "",
+                        null,
+                        -1
+                    ) + "There is no description of class in configuration file."
+                )
+                exitProcess(-1)
             }
         }
     }

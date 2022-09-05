@@ -3,8 +3,6 @@ package com.solanteq.service
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import org.slf4j.LoggerFactory
-import java.sql.Connection
-import java.sql.DriverManager
 import kotlin.system.exitProcess
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -88,15 +86,8 @@ class ReaderDB {
     // список объектов, описанных в scaleObject
     private var tblScaleObject = mutableListOf<DataDB>()
 
-    // коннект к БД
-    private lateinit var conn: Connection
-
     // создание файла заданий
     fun readAllObject() {
-
-        // считывание конфигурации
-        //val readJsonFile = ReadJsonFile()
-        //val jsonConfigFile = readJsonFile.readConfig()
 
         // считывание файла фильтра
         var jsonConfigFilterFile: FilterCfg? = null
@@ -108,15 +99,6 @@ class ReaderDB {
 
         // формирования списка полей, которые не нужно выгружать, для каждого класса
         CommonFunctions().createListFieldsNotExport(jsonConfigFile)
-
-        // установка соединения с БД
-        //logger.info("DataBase connection parameters: dbconn=$CONN_STRING dbuser=$CONN_LOGIN dbpass=$CONN_PASS ")
-        try {
-            conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-        } catch (e: Exception) {
-            logger.error("Error connection to DataBase: " + e.message)
-            exitProcess(-1)
-        }
 
         // - цикл по конфигурации(по всем таблицам)
         //     В случае если у объекта в конфигурации не заполнено поле keyFieldOut = "", т.е. объект не может быть идентифицирован в БД приемнике,
@@ -156,7 +138,7 @@ class ReaderDB {
                 val oneConfigClass =
                     jsonConfigFile.objects.find { it.code == includeClass.code && it.keyFieldOut != "" }
                 if (oneConfigClass != null) {
-                    //readOneObject(null, oneConfigClass, jsonConfigFile, false, "")
+                    checkKeyFieldOutForLinkObject(oneConfigClass)
                     readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
                 }
             }
@@ -164,18 +146,18 @@ class ReaderDB {
         } else if (jsonConfigFilterFile != null && jsonConfigFilterFile.exclude.isNotEmpty()) {
             for (oneConfigClass in jsonConfigFile.objects.filter { it.keyFieldOut != "" }) {
                 if (jsonConfigFilterFile.exclude.find { it.code == oneConfigClass.code && it.filterObjects == "" } == null) {
-                    //readOneObject(null, oneConfigClass, jsonConfigFile, false, "")
+                    checkKeyFieldOutForLinkObject(oneConfigClass)
                     readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
                 }
             }
             // если массив include и массив exclude пустые или файл фильтров не указан
         } else {
             for (oneConfigClass in jsonConfigFile.objects.filter { it.keyFieldOut != "" }) {
-                //readOneObject(null, oneConfigClass, jsonConfigFile, false, "")
+                checkKeyFieldOutForLinkObject(oneConfigClass)
                 readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
             }
         }
-        conn.close()
+        //conn.close()
 
         val localDateTime = LocalDateTime.now()
         val datetimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -208,19 +190,17 @@ class ReaderDB {
 
         // считывание файла заданий
         val jsonTaskFile = readJsonFile.readTask()
-        //val jsonTaskFile = configJson.readJsonFile<TaskFileFields>(TASK_FILE)
 
-        // установка даты аудита из файла задания
-        //AUDIT_DATE = jsonTaskFile.cfgList[0].auditDate!!
+        // проверка того, чтобы каждый класс из файла загрузки был описан в файле конфигурации
+        CommonFunctions().checkObjectClass(jsonTaskFile, jsonConfigFile, javaClass.toString())
 
-        // установка соединения с БД
-        //logger.info("DataBase connection parameters: dbconn=$CONN_STRING dbuser=$CONN_LOGIN dbpass=$CONN_PASS ")
+        /*// установка соединения с БД
         try {
             conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
         } catch (e: Exception) {
             logger.error("Error connection to DataBase: " + e.message)
             exitProcess(-1)
-        }
+        }*/
 
         // цикл по объектам из файла заданий
         for (oneTaskObject in jsonTaskFile.element) {
@@ -229,18 +209,18 @@ class ReaderDB {
             //readOneObject(oneTaskObject, oneConfigClass, jsonConfigFile, false, "")
             readOneObject(oneTaskObject, oneConfigClass, jsonConfigFile, "", 0)
 
-            if (false) {
+            /*if (false) {
                 // цикл по linkObjects с keyType=In объекта из файла заданий и добавление linkObjects в файл выгрузки как главных объектов
                 for (oneLinkObjectIn in oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "in" }) {
                     if (oneTaskObject.loadMode.lowercase() == "safe.linkobjects") {
                         readLinkObjectIn(oneTaskObject, oneConfigClass, jsonConfigFile, oneLinkObjectIn)
                     }
                 }
-            }
+            }*/
 
         }
 
-        conn.close()
+        //conn.close()
         tblMainMain = DataDBMain(jsonConfigFile.cfgList, tblMain)
         val localDateTime = LocalDateTime.now()
         val datetimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -284,6 +264,7 @@ class ReaderDB {
             CommonFunctions().createObjectIdForLogMsg(oneConfigClass.code, "", null, -1) +
                     "Query to the main object: $sqlQuery"
         )
+        val conn = DatabaseConnection.getConnection(javaClass.toString(), oneConfigClass.aliasDb)
         val queryStatement = conn.prepareStatement(sqlQuery)
         val queryResult = queryStatement.executeQuery()
 
@@ -406,6 +387,7 @@ class ReaderDB {
             }
         }
         queryStatement.close()
+        //conn.close()
     }
 
     // рекурсивное чтение ссылочных объектов (списки refObjects, refFieldsJson, refTables в конфиге)
@@ -445,6 +427,7 @@ class ReaderDB {
                             itemRefObject,
                             nestedLevel
                         )
+                    val conn = DatabaseConnection.getConnection(javaClass.toString(), jsonConfigObject.aliasDb)
                     val queryFieldValue = conn.prepareStatement(sqlFieldValue)
                     val resultFieldValue = queryFieldValue.executeQuery()
 
@@ -545,6 +528,7 @@ class ReaderDB {
 
                     }
                     queryFieldValue.close()
+                    //conn.close()
                 } else {
                     // поле указанное в референсе не найдено в таблице класса, в котором описан референс
                     if (tblFieldsOneObj.find { it.fieldName == itemRefObject.refField } == null) {
@@ -809,7 +793,8 @@ class ReaderDB {
             //if (isSaveLinkObject && itemRefObject.codeRef == tblMain[tblMain.lastIndex].code) {
             if (linkObjectLevel > 0 &&
                 (itemRefObject.codeRef == tblMain.last().code ||
-                        (tblLinkObject.isNotEmpty() && tblLinkObject.last().code == itemRefObject.codeRef))) {
+                        (tblLinkObject.isNotEmpty() && tblLinkObject.last().code == itemRefObject.codeRef))
+            ) {
                 continue
             }
 
@@ -867,7 +852,7 @@ class ReaderDB {
                         -1
                     ) + "Query to find \"refFieldsJson\". " + sqlFieldValue
                 )
-
+                val conn = DatabaseConnection.getConnection(javaClass.toString(), jsonCfgOneObj.aliasDb)
                 val queryFieldValue = conn.prepareStatement(sqlFieldValue)
                 val queryResult = queryFieldValue.executeQuery()
                 if (!queryResult.isBeforeFirst) {
@@ -903,7 +888,10 @@ class ReaderDB {
                     try {
                         // зачитываю json-строку атрибутов в дерево
                         val attribute = ReadJsonFile().readJsonStrAsTree(jsonStr)
-                        val attributeRecord = attribute[oneRefFieldJson.record]
+                        var attributeRecord = attribute[oneRefFieldJson.record]
+                        if (oneRefFieldJson.record == "") {
+                            attributeRecord = attribute
+                        }
                         val fieldNameInJsonStr = oneRefFieldJson.refField
                         if (attributeRecord != null && attributeRecord.size() > 0) {
                             // для каждого значения референса из строки атрибутов ищу референс среди референсов переданного объекта
@@ -949,6 +937,7 @@ class ReaderDB {
                     }
                 }
                 queryFieldValue.close()
+                //conn.close()
             }
         }
 
@@ -993,6 +982,10 @@ class ReaderDB {
                 ) + "Query to find \"refTables\". " + sqlFieldValue
             )
 
+            // Запрос строится к БД, в которой находится референсный объект типа refTables.
+            // Например, для главного объекта mccGroup запрос к его refTables класса mсс будет построен к БД, указанной в классе mcc.
+            // При запуске приложения есть проверка того, что объект и его референсы refTables находятся в одной БД, т.е. объекты mccGroup и mcc в одной БД.
+            val conn = DatabaseConnection.getConnection(javaClass.toString(), jsonCfgAllObj.objects[indObj].aliasDb)
             val queryFieldValue = conn.prepareStatement(sqlFieldValue)
             val queryResult = queryFieldValue.executeQuery()
             if (!queryResult.isBeforeFirst) {
@@ -1026,6 +1019,7 @@ class ReaderDB {
                 )
             }
             queryFieldValue.close()
+            //conn.close()
         }
 
         return refObjects
@@ -1080,7 +1074,7 @@ class ReaderDB {
         oneConfigClass: ObjectCfg,     // один класс из конфига
         jsonConfigFile: RootCfg,       // все классы из конфига
         tblFieldsOneObj: List<Fields>,  // список полей объекта класса jsonCfgOneObj в виде {название поля, значение поля}
-        linkObjectLevel: Int,
+        linkObjectLevel: Int
     ) {
 
         if (oneConfigClass.linkObjects.isNotEmpty()) {
@@ -1260,7 +1254,7 @@ class ReaderDB {
     /* НЕ УДАЛЯТЬ*/
     // выгрузка linkObject.keyType=In. объекты linkObject.keyType=In выгружаются как главные объекты
     // в первую очередь сделано для выгрузки всех тарифов для тарифной группы, указанной в файле заданий с "loadMode": "Safe.linkobjects"
-    private fun readLinkObjectIn(     /* НЕ УДАЛЯТЬ*/
+    /*private fun readLinkObjectIn(     /* НЕ УДАЛЯТЬ*/
         oneTaskObject: TaskFileFields,
         oneConfigClass: ObjectCfg, // класс из конфигурации
         jsonConfigFile: RootCfg,
@@ -1337,6 +1331,8 @@ class ReaderDB {
         )
 
         //поиск объектов linkObject.keyType=In для выгрузки
+        // объекты linkObject должны быть в той же БД что и главный объект. Это проверяется при запуске приложения
+        val conn = DatabaseConnection.getConnection(javaClass.toString(),oneConfigClass.aliasDb)
         val queryFieldValue = conn.prepareStatement(sqlQuery)
         val resultQuery = queryFieldValue.executeQuery()
 
@@ -1365,7 +1361,8 @@ class ReaderDB {
             readOneObject(taskObject, oneLinkObjectInClass, jsonConfigFile, "", 0)
         }
         queryFieldValue.close()
-    }
+        //conn.close()
+    }*/
 
     private fun compareScaleObjects(
         sqlQuery: String,
@@ -1379,7 +1376,8 @@ class ReaderDB {
         var scaleOneObjectFieldsFromDB = mutableListOf<Fields>()
 
         var iRowCount = 0 // кол-во записей класса scaleConfigClass в БД
-        val connCompare = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
+        //val connCompare = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
+        val connCompare = DatabaseConnection.getConnection(javaClass.toString(), scaleClass.aliasDb)
         logger.trace(
             CommonFunctions().createObjectIdForLogMsg(
                 linkConfigClass.code,
@@ -1418,7 +1416,7 @@ class ReaderDB {
             scaleOneObjectFieldsFromDB = mutableListOf<Fields>()
             iRowCount++
         }
-        connCompare.close()
+        //connCompare.close()
 
         var scaleObjectFromId = ""
         var scaleObjectFromFileFieldName = ""
@@ -1554,6 +1552,31 @@ class ReaderDB {
             ) + "The scaleObjects <${scaleClass.code}> match."
         )
         return true
+    }
+
+    // Проверка выгрузки linkObject.
+    // Если в классе есть ссылка на класс-linkObject, у которого заполнен keyFieldOut,
+    // то такой класс-linkObject не может быть выгружен как главный объект.
+    private fun checkKeyFieldOutForLinkObject(
+        checkConfigClass: ObjectCfg
+    ) {
+        if (checkConfigClass.keyFieldOut != "") {
+            for (oneConfigClass in jsonConfigFile.objects.filter { it.linkObjects.isNotEmpty() }) {
+                val oneConfigClassLinkObjRef = oneConfigClass.linkObjects.find { it.codeRef == checkConfigClass.code }
+                if (oneConfigClassLinkObjRef != null) {
+                    logger.error(
+                        CommonFunctions().createObjectIdForLogMsg(
+                            oneConfigClassLinkObjRef.codeRef,
+                            "",
+                            null,
+                            -1
+                        ) + "The objects of class <${checkConfigClass.code}> cannot be unloaded to the task file, because" +
+                                " there is a linkObject reference to them from the <${oneConfigClass.code}> class."
+                    )
+                    exitProcess(-1)
+                }
+            }
+        }
     }
 
 }

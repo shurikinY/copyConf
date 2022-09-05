@@ -1,5 +1,7 @@
 package com.solanteq.service
 
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import java.io.File
@@ -28,8 +30,17 @@ class WriterJson {
         writer.close()
     }
 
-    fun createJsonFile(attribute : ObjectNode) : String {
+    /*fun createJsonFile(attribute : ObjectNode) : String {
         return jacksonObjectMapper().writeValueAsString(attribute)
     }
+
+    fun createJsonFile(attribute : ArrayNode) : String {
+        return jacksonObjectMapper().writeValueAsString(attribute)
+    }*/
+
+    fun createJsonFile(attribute : JsonNode) : String {
+        return jacksonObjectMapper().writeValueAsString(attribute)
+    }
+
 
 }

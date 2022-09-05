@@ -23,7 +23,7 @@ class CreateReport {
     private var resultListOfProcessedObject = mutableListOf<ReportData>()
 
     // Формирование сводного отчета по результатам проверки/загрузки файла
-    public fun createReportOfProgramExecution(
+    public fun createSummaryReport(
         classCode: String,
         actionWithObject: ActionWithObject
     ) {
@@ -53,7 +53,7 @@ class CreateReport {
 
         logger.info("Summary report:")
 
-        resultListOfProcessedObject.sortedBy { it.classCode }
+        resultListOfProcessedObject.sortWith(compareBy {it.classCode})
 
         for (processedObject in resultListOfProcessedObject) {
             if (typeReport == "check") {

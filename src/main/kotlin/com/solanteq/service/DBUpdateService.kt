@@ -7,7 +7,8 @@ import ch.qos.logback.core.joran.spi.JoranException
 import com.solanteq.security.PasswordEncryptor
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.sql.DriverManager
+import java.sql.Connection
+//import java.sql.DriverManager
 import kotlin.system.exitProcess
 
 public var REGIM = ""
@@ -20,9 +21,21 @@ public var CONFIG_FILE = ""
 public var TASK_FILE = ""
 public var OBJECT_FILE = ""
 public var FILTER_FILE = ""
-//public var DATASOURCES_FILE = ""
+public var DATASOURCES_FILE = ""
 public var AUDIT_DATE = ""
 private val LOGBACK_FILE_PATH = "config/logback.xml"
+public val MAIN_ALIASDB = "MainAliasDB"
+
+/**
+ * Name of system property with the first component of the passphrase
+ */
+public val SYS_PROP_COMPONENT_1 = "component1";
+
+/**
+ * Name of system property with the second component of the passphrase
+ */
+public val SYS_PROP_COMPONENT_2 = "component2";
+
 
 // Класс описывает действия с объектом при проверке/загрузке
 data class ActionWithObject(
@@ -57,13 +70,15 @@ data class DataSource(
     val pswComponent2: String?
 )
 
-// список настроек с источниками данных
+// список настроек из файла с источниками данных
 public lateinit var dataSourcesSettings : DataSources
+
+public val dataSourceConnections = mutableMapOf<String, Connection>()
 
 class CommonConstants {
 
     // версия программы
-    val VERSION = "1.0.5.20"
+    val VERSION = "1.0.5.26"
 
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2
@@ -88,7 +103,7 @@ class CommonConstants {
         "-w",   // Имя файла задания
         "-r",   // Имя файла результата
         "-f",   // Имя файла фильтра
-        //"-dbs", // Имя файла с настройкой источников данных
+        "-dbs", // Имя файла с настройкой источников данных
         "-d"    // Дата в формате YYYY-MM-DD HH:MM:SS
     )
 
@@ -104,6 +119,11 @@ class CommonConstants {
 fun main(args: Array<String>) {
 
     val logger = LoggerFactory.getLogger("Main")
+
+    /*val variable = "component1"
+    logger.info(System.getProperty(variable))
+    System.setProperty(variable,"werdff3")
+    logger.info(System.getProperty(variable))*/
 
     if (File(LOGBACK_FILE_PATH).exists()) {
 
@@ -136,9 +156,22 @@ fun main(args: Array<String>) {
     ) {
 
         val readJsonFile = ReadJsonFile()
-        /*if (DATASOURCES_FILE != "") {
+
+        if (DATASOURCES_FILE != "") {
             dataSourcesSettings = readJsonFile.readDataSources()
-        }*/
+
+            // проверка алиасов из файла с источниками БД с алиасами из файла конфигурации
+            DatabaseConnection.checkAliasDB("Main")
+
+            // проверка того, что объект и его linkObjects находятся в одной БД
+            DatabaseConnection.checkAliasDBForLinkObjects("Main")
+
+            // проверка того, что объект и его референсы refTables находятся в одной БД
+            DatabaseConnection.checkAliasDBForRefTables("Main")
+
+            }
+        // создание подключений к базам данных
+        DatabaseConnection.createConnections("Main")
 
         // режим создания файла задания
         if (REGIM == CommonConstants().REGIM_CREATE_TASKFILE) {
@@ -286,7 +319,7 @@ class DBUpdateService {
                     CONN_PASSENCRYPT = args[args.indexOf(arg) + 1]
                     val encryptedPass: String
                     if (CONN_PASSENCRYPT == "PROMT") {
-                        print("Enter password: ")
+                        print("Enter encrypted password: ")
                         encryptedPass = System.console()?.readPassword()?.joinToString("") ?: (readLine() ?: "")
                     } else {
                         encryptedPass = CONN_PASSENCRYPT
@@ -303,7 +336,7 @@ class DBUpdateService {
                 "-w" -> TASK_FILE = args[args.indexOf(arg) + 1].lowercase()
                 "-r" -> OBJECT_FILE = args[args.indexOf(arg) + 1].lowercase()
                 "-f" -> FILTER_FILE = args[args.indexOf(arg) + 1].lowercase()
-                //"-dbs" -> DATASOURCES_FILE = args[args.indexOf(arg) + 1].lowercase()
+                "-dbs" -> DATASOURCES_FILE = args[args.indexOf(arg) + 1].lowercase()
                 "-d" -> AUDIT_DATE = args[args.indexOf(arg) + 1]
             }
         }
@@ -323,15 +356,15 @@ class DBUpdateService {
             logger.error("<The regim is not specified>")
             exitProcess(-1)
         }
-        if (CONN_STRING == "") {
+        if (CONN_STRING == "" && DATASOURCES_FILE == "") {
             logger.error("<The Connection String must be specified>")
             exitProcess(-1)
         }
-        if (CONN_LOGIN == "") {
+        if (CONN_LOGIN == "" && DATASOURCES_FILE == "") {
             logger.error("<The UserLogin must be specified in the Connection String>")
             exitProcess(-1)
         }
-        if (CONN_PASSOPEN == "" && CONN_PASSENCRYPT == "") {
+        if (CONN_PASSOPEN == "" && CONN_PASSENCRYPT == "" && DATASOURCES_FILE == "") {
             logger.error("<The UserPassword or UserPasswordEncrypt must be specified in the Connection String>")
             exitProcess(-1)
         }
