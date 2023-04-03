@@ -78,7 +78,7 @@ public val dataSourceConnections = mutableMapOf<String, Connection>()
 class CommonConstants {
 
     // версия программы
-    val VERSION = "1.0.5.26"
+    val VERSION = "1.0.5.27"
 
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2

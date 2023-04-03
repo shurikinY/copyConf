@@ -1,11 +1,10 @@
 package com.solanteq.service
 
+//import java.sql.Connection
+//import java.sql.DriverManager
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import org.slf4j.LoggerFactory
-import java.sql.Connection
-//import java.sql.Connection
-//import java.sql.DriverManager
 import kotlin.system.exitProcess
 
 //class CheckObject(allCheckObjectMain: DataDBMain) {
@@ -444,16 +443,21 @@ object CheckObject {
                     )
                     // проверка пройдена успешно
                     isFindAmongMainObjects = true
-                }
-                logger.debug(
-                    CommonFunctions().createObjectIdForLogMsg(
-                        oneConfClassRefObj.code,
-                        oneConfClassRefObj.keyFieldOut,
-                        oneCheckRefObj.row.fields,
-                        oneCheckRefObj.nestedLevel
-                    ) + "The object was not found among the main objects."
-                )
+                } else
+                    logger.debug(
+                        CommonFunctions().createObjectIdForLogMsg(
+                            oneConfClassRefObj.code,
+                            oneConfClassRefObj.keyFieldOut,
+                            oneCheckRefObj.row.fields,
+                            oneCheckRefObj.nestedLevel
+                        ) + "The object was not found among the main objects."
+                    )
             }
+        }
+
+        // если референс найден среди главных объектов, то выходим
+        if (isFindAmongMainObjects) {
+            return
         }
 
         if (oneCheckRefObj.nestedLevel == 1) {
@@ -478,11 +482,11 @@ object CheckObject {
             )
         }
 
-        // заменили значения ссылочных полей у референса
-        // если референс найден среди главных объектов, то выходим
-        if (isFindAmongMainObjects) {
-            return
-        }
+//        // заменили значения ссылочных полей у референса
+//        // если референс найден среди главных объектов, то выходим
+//        if (isFindAmongMainObjects) {
+//            return
+//        }
 
         // поиск референсного объекта в базе приемнике.
         // должен быть найден ровно один объект
@@ -494,26 +498,6 @@ object CheckObject {
         }
 
         if (oneCheckRefObj.nestedLevel == 1) {
-
-            /*// сравнение названия полей референсного объекта из файла с названиями полей таблицы его класса из базы приемника
-            checkFieldsName(oneCheckRefObj.row.fields, oneConfClassRefObj, oneCheckRefObj.nestedLevel)
-
-            // установка нового значения ссылочного поля в файле для референса типа fieldJson
-            setNewIdFieldJson(
-                oneCheckRefObj.row.fields,
-                oneCheckRefObj.refObject,
-                oneConfClassRefObj,
-                jsonConfigFile
-            )
-
-            // установка нового значения ссылочного поля в файле для референса типа refFields
-            setNewIdRefFields(
-                oneCheckRefObj.row.fields,
-                oneCheckRefObj.refObject,
-                oneConfClassRefObj,
-                jsonConfigFile,
-                null
-            )*/
 
             if (!compareObjectRefTables(
                     idObjectInDB,
@@ -1741,25 +1725,48 @@ object CheckObject {
                 idObjectInDB =
                     loadObject.getObjIdInDB(oneRefObject.row.fields, oneRefClassObj, oneRefObject.nestedLevel, false)
             } else {
+                var isGenerateObjIdInDB = true;
+                if (oneRefObject.nestedLevel == 2) {
+                    isGenerateObjIdInDB = false;
+                }
+
                 // поиск id референсного объекта в бд приемнике
                 idObjectInDB =
-                    loadObject.getObjIdInDB(oneRefObject.row.fields, oneRefClassObj, oneRefObject.nestedLevel, true)
+                    loadObject.getObjIdInDB(oneRefObject.row.fields, oneRefClassObj, oneRefObject.nestedLevel, isGenerateObjIdInDB)
             }
 
-            // для референса inchild нужно записать значение null, т.к. реальное значение еще неизвестно
-            if (idObjectInDB == "-" && !isSetNullValue && oneRefObject!!.typeRef.lowercase() != "inchild") {
+            // Для референса inchild нужно записать значение null, т.к. реальное значение еще неизвестно.
+            // Также срабатывает в случае, когда для референса первого уровня в базе не найден референс второго уровня.
+            //   При этом референса первого уровня нет среди главных объектов (эта проверка уже пройдена в checkOneRefObject)
+            if (idObjectInDB == "-" &&
+                ((!isSetNullValue && oneRefObject!!.typeRef.lowercase() != "inchild") || (oneRefObject!!.nestedLevel == 2))
+            ) {
                 logger.error(
                     CommonFunctions().createObjectIdForLogMsg(
                         oneConfClassObj.code,
                         oneConfClassObj.keyFieldOut,
                         oneLoadObjFields,
                         -1
-                    ) + "<The reference object <$refField.=${oneLoadObjFields.find { it.fieldName == refField }!!.fieldValue.toString()}>" +
-                            " was not found in the receiver database>. "
+                    ) + "The reference object <$refField=${oneLoadObjFields.find { it.fieldName == refField }!!.fieldValue.toString()}>" +
+                            " was not found in the receiver database. (refField)"
                 )
                 exitProcess(-1)
-                //exitFromProgram()
             }
+
+            // Срабатывает в случае, когда для референса первого уровня в базе не найден референс второго уровня.
+            // При этом референса первого уровня нет среди главных объектов (эта проверка уже пройдена в checkOneRefObject)
+//            if (idObjectInDB == "-" && oneRefObject != null && oneRefObject.nestedLevel == 2){
+//                logger.error(
+//                    CommonFunctions().createObjectIdForLogMsg(
+//                        oneConfClassObj.code,
+//                        oneConfClassObj.keyFieldOut,
+//                        oneLoadObjFields,
+//                        2
+//                    ) + "<The reference object <$refField.=${oneLoadObjFields.find { it.fieldName == refField }!!.fieldValue.toString()}>" +
+//                            " was not found in the receiver database>. "
+//                )
+//                exitProcess(-1)
+//            }
 
             // установка нового значения референса
             val indexOfRefField = oneLoadObjFields.indexOfFirst { it.fieldName == refField }
@@ -1822,14 +1829,36 @@ object CheckObject {
                             // поиск референса типа refFieldsJson того же класса, что и референс из атрибута
                             for (oneRefObject in oneLoadObjRef.filter { it.typeRef == "refFieldsJson" && it.code == oneRefFieldJson.codeRef }) {
                                 if (oneRefObject.row.fields.find { it.fieldName == oneRefObject.fieldRef && it.fieldValue == fieldValueInJsonStr } != null) {
+
+                                    var isGenerateObjIdInDB = true;
+                                    if (oneRefObject.nestedLevel == 2) {
+                                        isGenerateObjIdInDB = false;
+                                    }
+
                                     // референс найден. ищу его ид в бд приемнике и заменяю им ид из бд источника
                                     val refFieldValueNew =
                                         loadObject.getObjIdInDB(
                                             oneRefObject.row.fields,
                                             oneRefFieldJsonClass,
                                             oneRefObject.nestedLevel,
-                                            true
+                                            isGenerateObjIdInDB
                                         )
+
+                                    // Срабатывает в случае, когда для референса первого уровня в базе не найден референс второго уровня.
+                                    // При этом референса первого уровня нет среди главных объектов (эта проверка уже пройдена в checkOneRefObject)
+                                    if (refFieldValueNew == "-" && oneRefObject.nestedLevel == 2) {
+                                        logger.error(
+                                            CommonFunctions().createObjectIdForLogMsg(
+                                                oneConfClassObj.code,
+                                                oneConfClassObj.keyFieldOut,
+                                                oneLoadObjFields,
+                                                -1
+                                            ) + "The reference object <${oneRefObject.code}=${oneRefObject.row.fields.find { it.fieldName == oneRefFieldJsonClass.keyFieldOut }!!.fieldValue.toString()}>" +
+                                                    " was not found in the receiver database. (fieldJson)"
+                                        )
+                                        exitProcess(-1)
+                                    }
+
                                     if (fieldValueInJsonStr != refFieldValueNew) {
                                         if (itemFromAttribute is ObjectNode) {
                                             (itemFromAttribute as ObjectNode).put(fieldNameInJsonStr, refFieldValueNew)
@@ -1847,12 +1876,6 @@ object CheckObject {
                         }
                         oneLoadObjFields[indexOfJsonField].fieldValue =
                             WriterJson().createJsonFile(attribute)
-                        //WriterJson().createJsonFile(attribute as ObjectNode)
-                        /*if (attribute is ObjectNode) {
-                            WriterJson().createJsonFile(attribute as ObjectNode)
-                        } else {
-                            WriterJson().createJsonFile(attribute as ArrayNode)
-                        }*/
                     }
                 }
             }
