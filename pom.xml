@@ -6,7 +6,7 @@
 
     <artifactId>copyConf</artifactId>
     <groupId>me.shuri</groupId>
-    <version>1.0.5.27-SNAPSHOT</version>
+    <version>1.0.5.27.1</version>
     <packaging>jar</packaging>
 
     <name>copyConf</name>

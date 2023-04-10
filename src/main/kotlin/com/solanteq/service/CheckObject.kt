@@ -1287,10 +1287,9 @@ object CheckObject {
                     //      Если Object2 не найден, то в базу вставляется Object2 из файла со всеми его Object3
                     //      Объекты Object3 из БД приемника не меняются.
                     //    - Если Object3 из БД приемника не найден в файле, то такому Object3 проставляется audit_state='R'.
-
                     if (oneLinkObjClass.keyFieldOut == "" &&
-                        (!isLinkObjectFindInFile && oneLinkObjDescription.keyType.lowercase() == "ingroup" ||
-                                !isLinkObjectFindInFile && oneLinkObjDescription.keyType.lowercase() == "in" && parentLinkObjectKeyType.lowercase() != "ingroup")
+                        ((!isLinkObjectFindInFile && oneLinkObjDescription.keyType.lowercase() == "ingroup") ||
+                                (!isLinkObjectFindInFile && oneLinkObjDescription.keyType.lowercase() == "in" && parentLinkObjectKeyType.lowercase() != "ingroup"))
                     ) {
 
                         if (!isLinkObjectFindInFile && oneLinkObjDescription.keyType.lowercase() == "ingroup") {
@@ -1349,7 +1348,9 @@ object CheckObject {
                             }
                         }
                     } else if (oneLinkObjClass.keyFieldOut == "" &&
-                        !isLinkObjectFindInFile && oneLinkObjDescription.keyType.lowercase() == "in" && parentLinkObjectKeyType.lowercase() != "ingroup"
+                        !isLinkObjectFindInFile &&
+                        ((oneLinkObjDescription.keyType.lowercase() == "in" && parentLinkObjectKeyType.lowercase() != "ingroup") ||
+                                (oneLinkObjDescription.keyType.lowercase() == "ingroup" && parentLinkObjectKeyType.lowercase() == ""))
                     ) {
                         sqlQueryConditionArray[0] += sqlQueryLinkObjDeclare
                         sqlQueryConditionArray[1] += sqlQueryLinkObjInit
@@ -1732,7 +1733,12 @@ object CheckObject {
 
                 // поиск id референсного объекта в бд приемнике
                 idObjectInDB =
-                    loadObject.getObjIdInDB(oneRefObject.row.fields, oneRefClassObj, oneRefObject.nestedLevel, isGenerateObjIdInDB)
+                    loadObject.getObjIdInDB(
+                        oneRefObject.row.fields,
+                        oneRefClassObj,
+                        oneRefObject.nestedLevel,
+                        isGenerateObjIdInDB
+                    )
             }
 
             // Для референса inchild нужно записать значение null, т.к. реальное значение еще неизвестно.
@@ -1752,21 +1758,6 @@ object CheckObject {
                 )
                 exitProcess(-1)
             }
-
-            // Срабатывает в случае, когда для референса первого уровня в базе не найден референс второго уровня.
-            // При этом референса первого уровня нет среди главных объектов (эта проверка уже пройдена в checkOneRefObject)
-//            if (idObjectInDB == "-" && oneRefObject != null && oneRefObject.nestedLevel == 2){
-//                logger.error(
-//                    CommonFunctions().createObjectIdForLogMsg(
-//                        oneConfClassObj.code,
-//                        oneConfClassObj.keyFieldOut,
-//                        oneLoadObjFields,
-//                        2
-//                    ) + "<The reference object <$refField.=${oneLoadObjFields.find { it.fieldName == refField }!!.fieldValue.toString()}>" +
-//                            " was not found in the receiver database>. "
-//                )
-//                exitProcess(-1)
-//            }
 
             // установка нового значения референса
             val indexOfRefField = oneLoadObjFields.indexOfFirst { it.fieldName == refField }
