@@ -3,9 +3,9 @@ package com.solanteq.service
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import org.slf4j.LoggerFactory
-import kotlin.system.exitProcess
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.system.exitProcess
 
 data class DataDBMain(
     val cfgList: List<CfgList>,
@@ -897,26 +897,34 @@ class ReaderDB {
                             // для каждого значения референса из строки атрибутов ищу референс среди референсов переданного объекта
                             for (itemFromAttribute in attributeRecord) {
 
-                                // ид референса в бд источнике
-                                var fieldValueInJsonStr: String
+                                // ид референса/референсов в бд источнике
+                                val fieldValueInJsonArrayStr = mutableListOf<String>()
                                 if (itemFromAttribute is ObjectNode) { // для вариантов вида {\"restrictions\":[{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"},{\"finInstitutionId\":\"100002\",\"restrictionActionType\":\"BLOCK\"}]}
-                                    fieldValueInJsonStr = itemFromAttribute.get(fieldNameInJsonStr).asText()
+                                    if (itemFromAttribute.get(fieldNameInJsonStr) is ArrayNode) {
+                                        for (item in itemFromAttribute.get(fieldNameInJsonStr)) { // {"calcItemsHistory":false,"balanceTypes":[{"balanceTypeId":100000,"bitChOrders":[100009,100010,100011,100012]},{"balanceTypeId":100001,"bitChOrders":[100003]}]}
+                                            fieldValueInJsonArrayStr.add(item.asText())
+                                        }
+                                    } else {
+                                        fieldValueInJsonArrayStr.add(itemFromAttribute.get(fieldNameInJsonStr).asText())
+                                    }
                                 } else if (attributeRecord is ObjectNode) { // для вариантов вида {\"restrictions\":{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"}}
-                                    fieldValueInJsonStr = attributeRecord.get(fieldNameInJsonStr).asText()
+                                    fieldValueInJsonArrayStr.add(attributeRecord.get(fieldNameInJsonStr).asText())
                                 } else { // для вариантов вида {"systemGroupList":[100000,100002]}; {"systemGroupList":[100000]}
-                                    fieldValueInJsonStr = itemFromAttribute.asText()
+                                    fieldValueInJsonArrayStr.add(itemFromAttribute.asText())
                                 }
-                                refObjects.add(
-                                    RefObjects(
-                                        oneRefFieldJson.record,
-                                        oneRefObjClass.keyFieldIn,
-                                        fieldValueInJsonStr,//item.get(oneRefFieldJson.refField).asText(),
-                                        oneRefFieldJson.codeRef,
-                                        oneRefFieldJson.mandatory,
-                                        oneRefFieldJson.keyType,
-                                        "refFieldsJson"
+                                for (fieldValueInJsonStr in fieldValueInJsonArrayStr) {
+                                    refObjects.add(
+                                        RefObjects(
+                                            oneRefFieldJson.record,
+                                            oneRefObjClass.keyFieldIn,
+                                            fieldValueInJsonStr,
+                                            oneRefFieldJson.codeRef,
+                                            oneRefFieldJson.mandatory,
+                                            oneRefFieldJson.keyType,
+                                            "refFieldsJson"
+                                        )
                                     )
-                                )
+                                }
                                 // это для случаев вида \"restrictions\":{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"}},
                                 // когда в itemFromAttribute попадают "finInstitutionId":"100001, затем "restrictionActionType":"BLOCK"
                                 if (attributeRecord !is ArrayNode) {
