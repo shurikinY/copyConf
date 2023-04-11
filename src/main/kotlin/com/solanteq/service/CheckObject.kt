@@ -1744,8 +1744,8 @@ object CheckObject {
             // Для референса inchild нужно записать значение null, т.к. реальное значение еще неизвестно.
             // Также срабатывает в случае, когда для референса первого уровня в базе не найден референс второго уровня.
             //   При этом референса первого уровня нет среди главных объектов (эта проверка уже пройдена в checkOneRefObject)
-            if (idObjectInDB == "-" &&
-                ((!isSetNullValue && oneRefObject!!.typeRef.lowercase() != "inchild") || (oneRefObject!!.nestedLevel == 2))
+            if (idObjectInDB == "-" && !isSetNullValue &&
+                (oneRefObject!!.typeRef.lowercase() != "inchild" || oneRefObject!!.nestedLevel == 2)
             ) {
                 logger.error(
                     CommonFunctions().createObjectIdForLogMsg(
