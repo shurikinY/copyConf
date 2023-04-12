@@ -194,33 +194,13 @@ class ReaderDB {
         // проверка того, чтобы каждый класс из файла загрузки был описан в файле конфигурации
         CommonFunctions().checkObjectClass(jsonTaskFile, jsonConfigFile, javaClass.toString())
 
-        /*// установка соединения с БД
-        try {
-            conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-        } catch (e: Exception) {
-            logger.error("Error connection to DataBase: " + e.message)
-            exitProcess(-1)
-        }*/
-
         // цикл по объектам из файла заданий
         for (oneTaskObject in jsonTaskFile.element) {
             val oneConfigClass =
                 jsonConfigFile.objects[jsonConfigFile.objects.indexOfFirst { it.code == oneTaskObject.code }]
-            //readOneObject(oneTaskObject, oneConfigClass, jsonConfigFile, false, "")
             readOneObject(oneTaskObject, oneConfigClass, jsonConfigFile, "", 0)
-
-            /*if (false) {
-                // цикл по linkObjects с keyType=In объекта из файла заданий и добавление linkObjects в файл выгрузки как главных объектов
-                for (oneLinkObjectIn in oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "in" }) {
-                    if (oneTaskObject.loadMode.lowercase() == "safe.linkobjects") {
-                        readLinkObjectIn(oneTaskObject, oneConfigClass, jsonConfigFile, oneLinkObjectIn)
-                    }
-                }
-            }*/
-
         }
 
-        //conn.close()
         tblMainMain = DataDBMain(jsonConfigFile.cfgList, tblMain)
         val localDateTime = LocalDateTime.now()
         val datetimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -243,7 +223,6 @@ class ReaderDB {
         oneTaskObject: TaskFileFields?,
         oneConfigClass: ObjectCfg,
         jsonConfigFile: RootCfg,
-        //isSaveLinkObject: Boolean, // режим выгрузки массива linkObjects. Может принимать true только в режиме save, при выгрузке объектов linkObjects
         scaleQuery: String, // Заполняется в случаи выгрузки шкал, в остальных случаях пусто. может быть заполнено только в режиме save
         linkObjectLevel: Int = 0 // признак выгрузки массива linkObjects. Может принимать true только в режиме save, при выгрузке объектов linkObjects.
     ) {
@@ -256,7 +235,6 @@ class ReaderDB {
                 oneConfigClass,
                 oneTaskObject,
                 jsonConfigFile,
-                //isSaveLinkObject,
                 linkObjectLevel
             )
         }
@@ -268,7 +246,6 @@ class ReaderDB {
         val queryStatement = conn.prepareStatement(sqlQuery)
         val queryResult = queryStatement.executeQuery()
 
-        //if (!queryResult.isBeforeFirst && REGIM == CommonConstants().REGIM_CREATE_OBJFILE && !isSaveLinkObject) {
         if (!queryResult.isBeforeFirst && REGIM == CommonConstants().REGIM_CREATE_OBJFILE && linkObjectLevel == 0) {
             logger.error(
                 CommonFunctions().createObjectIdForLogMsg(
@@ -299,7 +276,6 @@ class ReaderDB {
             // рекурсивный поиск и запись ссылочных объектов в список tblRefObject
             if (REGIM == CommonConstants().REGIM_CREATE_OBJFILE) {
 
-                //readRefObject(oneConfigClass, jsonConfigFile, tblFields, isSaveLinkObject, 1)
                 readRefObject(oneConfigClass, jsonConfigFile, tblFields, linkObjectLevel, 1)
 
                 //if (!isSaveLinkObject && scaleQuery == "") {
@@ -329,16 +305,7 @@ class ReaderDB {
                     tblRefObject = mutableListOf<RefObject>()
                 }
                 readLinkObjectInGroup(oneConfigClass, jsonConfigFile, tblFields, linkObjectLevel)
-                //if (isSaveLinkObject) {
-                //if (linkObjectLevel > 0) {
                 if (linkObjectLevel == 1) {
-                    /*tblLinkObject.add(
-                        DataDB(
-                            oneConfigClass.code,
-                            oneTaskObject!!.loadMode,
-                            Row(tblFields, tblRefObject, listOf<DataDB>(), listOf<DataDB>())
-                        )
-                    )*/
                     tblMain[tblMain.lastIndex].row.linkObjects += tblLinkObject
                     tblLinkObject = mutableListOf<DataDB>()
                     tblRefObject = mutableListOf<RefObject>()
@@ -360,10 +327,6 @@ class ReaderDB {
                             tblScaleObject
                         )
 
-                    /*tblMain[tblMain.lastIndex].row.linkObjects[linkObjectLastIndex].row.scaleObjects =
-                        tblMain[tblMain.lastIndex].row.linkObjects[linkObjectLastIndex].row.scaleObjects?.plus(
-                            tblScaleObject
-                        )*/
                     tblScaleObject = mutableListOf<DataDB>()
                     tblRefObject = mutableListOf<RefObject>()
                 }
@@ -387,7 +350,6 @@ class ReaderDB {
             }
         }
         queryStatement.close()
-        //conn.close()
     }
 
     // рекурсивное чтение ссылочных объектов (списки refObjects, refFieldsJson, refTables в конфиге)
@@ -395,14 +357,12 @@ class ReaderDB {
         jsonCfgOneObj: ObjectCfg,       // один класс из конфига
         jsonCfgAllObj: RootCfg,         // все классы из конфига
         tblFieldsOneObj: List<Fields>,  // список полей объекта класса jsonCfgOneObj в виде {название поля, значение поля}
-        //isSaveLinkObject: Boolean,      // режим выгрузки массива linkObjects
         linkObjectLevel: Int,
         nestedLevel: Int,               // уровень вложенности ссылочного объекта
     ) {
 
         // формирование однородного списка референсов для разных типов списков(списки refObjects, refFieldsJson, refTables)
         val refObjects =
-            //createListToFindRefObjects(jsonCfgOneObj, tblFieldsOneObj, jsonCfgAllObj, isSaveLinkObject, nestedLevel)
             createListToFindRefObjects(jsonCfgOneObj, tblFieldsOneObj, jsonCfgAllObj, nestedLevel, linkObjectLevel)
 
         // цикл по ссылкам класса
@@ -450,8 +410,7 @@ class ReaderDB {
                     }
 
                     // запись данных БД в массив объектов для json
-                    var tblRefRow: RefRow //= RefRow(listOf<Fields>())
-                    //var tblRefRow = mutableListOf<RefRow>()
+                    var tblRefRow: RefRow
                     while (resultFieldValue.next()) {
                         val tblFields = mutableListOf<Fields>()
                         for (i in 1..resultFieldValue.metaData.columnCount) {
@@ -467,13 +426,11 @@ class ReaderDB {
                             // значение поля таблицы
                             val fieldValue = resultFieldValue.getString(i)
 
-                            // для объекта  последнего уровня рекурсии будут считаны только два поля: идентификатор и код
+                            // для объекта последнего уровня рекурсии будут считаны только два поля: идентификатор и код
                             if (nestedLevel == CommonConstants().NESTED_LEVEL_REFERENCE) {
                                 if (jsonConfigObject.keyFieldOut.contains(fieldName, ignoreCase = true)) {
-                                    //tblFields.add(Fields(jsonConfigObject.keyFieldOut, fieldValue))
                                     tblFields.add(Fields(fieldName, fieldValue))
                                 } else if (jsonConfigObject.keyFieldIn.contains(fieldName, ignoreCase = true)) {
-                                    //tblFields.add(Fields(jsonConfigObject.keyFieldIn, fieldValue))
                                     tblFields.add(Fields(fieldName, fieldValue))
                                 }
                                 continue
@@ -486,7 +443,7 @@ class ReaderDB {
                             checkFldOutForLink(
                                 jsonConfigObject,
                                 tblFields,
-                                jsonConfigObject.keyFieldOut/*, "keyFieldOut"*/
+                                jsonConfigObject.keyFieldOut
                             )
                         }
 
@@ -510,13 +467,6 @@ class ReaderDB {
 
                         // ограничение рекурсии
                         if (nestedLevel < CommonConstants().NESTED_LEVEL_REFERENCE) {
-                            /*readRefObject(
-                                jsonConfigObject,
-                                jsonCfgAllObj,
-                                tblFields,
-                                isSaveLinkObject,
-                                nestedLevel + 1
-                            )*/
                             readRefObject(
                                 jsonConfigObject,
                                 jsonCfgAllObj,
@@ -528,7 +478,6 @@ class ReaderDB {
 
                     }
                     queryFieldValue.close()
-                    //conn.close()
                 } else {
                     // поле указанное в референсе не найдено в таблице класса, в котором описан референс
                     if (tblFieldsOneObj.find { it.fieldName == itemRefObject.refField } == null) {
@@ -585,7 +534,6 @@ class ReaderDB {
         oneConfigClass: ObjectCfg,
         oneTaskObject: TaskFileFields?,
         jsonConfigFile: RootCfg,
-        //isSaveLinkObject: Boolean,
         linkObjectLevel: Int
     ): String {
 
@@ -611,13 +559,11 @@ class ReaderDB {
 
         if (REGIM == CommonConstants().REGIM_CREATE_OBJFILE) {
 
-            //if (isSaveLinkObject ) {
             if (linkObjectLevel > 0) {
                 val mainObjClass = jsonConfigFile.objects.find { it.code == oneTaskObject!!.code }!!
                 val mainObjId =
                     oneTaskObject!!.keyFieldIn.find { it.fieldName == mainObjClass.keyFieldIn }!!.fieldValue
 
-                //for (item in mainObjClass.linkObjects.filter { (it.keyType.lowercase() == "ingroup") && it.codeRef == oneConfigClass.code }) {
                 for (item in mainObjClass.linkObjects.filter { it.codeRef == oneConfigClass.code }) {
                     val linkFieldForMainTable = item.refField
                     dopCondForLinkObjId = " and $linkFieldForMainTable=$mainObjId "
@@ -632,13 +578,11 @@ class ReaderDB {
         // При формировании файла задания для объекта с настроенным списком подчиненных объектов linkObjects с типом "keyType": "InGroup"
         //  необходимо проверять по auditDateField вместе с родительским все подчиненные объекты.
         //  Родительский объект попадает в файл задания если был изменен хотя бы один из подчиненных.
-        //if (oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" }.isNotEmpty()
         if (oneConfigClass.linkObjects.isNotEmpty() && linkObjectLevel == 0) {
             sqlQuery =
                 "\nselect * from  $tableName where audit_state = 'A' $filterObjCond and ${oneConfigClass.keyFieldIn} in (\n "
             sqlQuery += "select ${oneConfigClass.keyFieldIn} from $tableName where audit_state = 'A' $auditDateObjCond $filterObjCond $dopCondForMainObjId\n "
 
-            //for (oneCfgLinkObj in oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" }) {
             for (oneCfgLinkObj in oneConfigClass.linkObjects) {
 
                 val oneCfgLinkObjClass = jsonConfigFile.objects.find { it.code == oneCfgLinkObj.codeRef }!!
@@ -655,7 +599,6 @@ class ReaderDB {
                     val mainObjId =
                         oneTaskObject!!.keyFieldIn.find { it.fieldName == mainObjClass.keyFieldIn }!!.fieldValue
 
-                    //for (item in mainObjClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" && it.codeRef == oneCfgLinkObjClass.code }) {
                     for (item in mainObjClass.linkObjects.filter { it.codeRef == oneCfgLinkObjClass.code }) {
                         val linkFieldForMainTable = item.refField
                         dopCondForLinkObjId = " and $linkFieldForMainTable=$mainObjId "
@@ -1103,7 +1046,6 @@ class ReaderDB {
                 val taskObject =
                     TaskFileFields(oneConfigClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
 
-                //readOneObject(taskObject, oneCfgLinkObjClass, jsonConfigFile, true, "", linkObjectLevel + 1)
                 readOneObject(taskObject, oneCfgLinkObjClass, jsonConfigFile, "", linkObjectLevel + 1)
             }
         }
@@ -1121,10 +1063,8 @@ class ReaderDB {
     ): Boolean {
 
         val scalable = Scalable(jsonConfigFile)
-        //if ((oneConfigClass.code.lowercase() == CommonConstants().NUMBER_TARIFF_VALUE_CLASS_NAME || oneConfigClass.code.lowercase() == CommonConstants().TARIFF_VALUE_CLASS_NAME) &&
         if (scalable.isClassHaveScaleComponent(oneConfigClass) &&
             !oneConfigClass.scale.isNullOrEmpty() &&
-            //tblFieldsOneObj.find { it.fieldName == CommonConstants().SCALE_COMPONENT_ID_FIELD_NAME }!!.fieldValue != null
             tblFieldsOneObj.find { it.fieldName == scalable.scaleComponentFieldName }!!.fieldValue != null
         ) {
 
@@ -1156,7 +1096,6 @@ class ReaderDB {
                     TaskFileFields(oneConfigClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
                 if (objectEvent == "Read") {
                     taskFileFields = mutableListOf<TaskFileFields>()
-                    //readOneObject(taskObject, scaleComponentClass, jsonConfigFile, false, sqlQuery)
                     readOneObject(taskObject, scaleComponentClass, jsonConfigFile, sqlQuery, 0)
                 } else if (objectEvent == "Load") {
 
@@ -1194,7 +1133,6 @@ class ReaderDB {
 
                         if (objectEvent == "Read") {
                             taskFileFields = mutableListOf<TaskFileFields>()
-                            //readOneObject(taskObject, scaleComponentValueClass, jsonConfigFile, false, sqlQuery)
                             readOneObject(taskObject, scaleComponentValueClass, jsonConfigFile, sqlQuery, 0)
                         } else if (objectEvent == "Load") {
 
@@ -1232,7 +1170,6 @@ class ReaderDB {
 
                                 if (objectEvent == "Read") {
                                     taskFileFields = mutableListOf<TaskFileFields>()
-                                    //readOneObject(taskObject, scaleAmountClass, jsonConfigFile, false, sqlQuery)
                                     readOneObject(taskObject, scaleAmountClass, jsonConfigFile, sqlQuery, 0)
                                 } else if (objectEvent == "Load") {
 

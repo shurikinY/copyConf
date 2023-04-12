@@ -38,6 +38,7 @@ data class ObjectCfg(
 )
 
 data class LinkObjects(
+    val mainField: String?,
     val refField: String,
     val codeRef: String,
     val mandatory: String?,
@@ -54,6 +55,10 @@ data class RefObjects(
     val refTypeArray: String = "refObjects"
 )
 
+//data class RefRelatedObjects(
+//    val refRelatedObjects : List<RefObjects>?
+//)
+
 data class FieldsNotExport(
     val name: String
 )
@@ -61,6 +66,7 @@ data class FieldsNotExport(
 data class FieldsJson(
     val name: String,
     val refObjects: List<RefObjects>?
+    //val refRelatedObjects: List<RefObjects>?
 )
 
 data class RefTables(
