@@ -575,15 +575,20 @@ class ReaderDB {
             }
         }
 
-        // При формировании файла задания для объекта с настроенным списком подчиненных объектов linkObjects с типом "keyType": "InGroup"
-        //  необходимо проверять по auditDateField вместе с родительским все подчиненные объекты.
-        //  Родительский объект попадает в файл задания если был изменен хотя бы один из подчиненных.
-        if (oneConfigClass.linkObjects.isNotEmpty() && linkObjectLevel == 0) {
+        // 1. При формировании файла задания для объекта с настроенным списком подчиненных объектов linkObjects с типом "keyType": "InGroup"
+        //     необходимо проверять по auditDateField вместе с родительским все подчиненные объекты.
+        //     Родительский объект попадает в файл задания если был изменен хотя бы один из подчиненных.
+        // 2. Объекты linkObject с keyType=InRefFieldsJson связаны с главным объектом через референс типа refFieldJson.
+        //    Например, lcScheme->balanceType->lcChargeOrder, где balanceType это референс, а lcChargeOrder это linjkObject
+        //    Такая зависимость описана в bo_lc_scheme.data следующим образом:
+        //    {"balanceTypes":[{"balanceTypeId":100001,"bitChOrders":[100002]},{"balanceTypeId":100000,"bitChOrders":[100000,100001,100004,100005]}]}
+        //    Для выгрузки объектов lcScheme формирую простой запрос к одной талице bo_lc_scheme.
+        if (oneConfigClass.linkObjects.any { !it.keyType.equals("InRefFieldsJson", true) } && linkObjectLevel == 0) {
             sqlQuery =
                 "\nselect * from  $tableName where audit_state = 'A' $filterObjCond and ${oneConfigClass.keyFieldIn} in (\n "
             sqlQuery += "select ${oneConfigClass.keyFieldIn} from $tableName where audit_state = 'A' $auditDateObjCond $filterObjCond $dopCondForMainObjId\n "
 
-            for (oneCfgLinkObj in oneConfigClass.linkObjects) {
+            for (oneCfgLinkObj in oneConfigClass.linkObjects.filter { !it.keyType.equals("InRefFieldsJson", true) }) {
 
                 val oneCfgLinkObjClass = jsonConfigFile.objects.find { it.code == oneCfgLinkObj.codeRef }!!
 
@@ -772,7 +777,10 @@ class ReaderDB {
         }
 
         // обработка списка референсов refFieldsJson
-        for (oneRefFieldsJson in jsonCfgOneObj.refFieldsJson) {
+        //for (oneRefFieldsJson in jsonCfgOneObj.refFieldsJson) {
+        for (oneRefFieldsJson in jsonCfgOneObj.refFieldsJson.filter {
+            !it.refObjects.isNullOrEmpty() && it.refObjects.any { ref -> !ref.keyType.equals("InLink", true) }
+        }) {
             if (!oneRefFieldsJson.refObjects.isNullOrEmpty()) {
 
                 var filterObjCond = ""
@@ -888,7 +896,6 @@ class ReaderDB {
                     }
                 }
                 queryFieldValue.close()
-                //conn.close()
             }
         }
 
@@ -970,7 +977,6 @@ class ReaderDB {
                 )
             }
             queryFieldValue.close()
-            //conn.close()
         }
 
         return refObjects
