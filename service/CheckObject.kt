@@ -190,8 +190,7 @@ object CheckObject {
             setNewIdFieldJson(
                 oneCheckObject.row.fields,
                 oneCheckObject.row.refObject,
-                oneConfClassMainObj,
-                -1
+                oneConfClassMainObj
             )
 
             // рекурсивная установка новых значений ссылок типа fieldJson объектов linkObjects
@@ -202,8 +201,8 @@ object CheckObject {
                 oneCheckObject.row.fields,
                 oneCheckObject.row.refObject,
                 oneConfClassMainObj,
-                null,
-                -1
+                //jsonConfigFile,
+                null
             )
 
             // рекурсивная установка новых значений ссылок типа refField объектов linkObjects
@@ -456,10 +455,10 @@ object CheckObject {
             }
         }
 
-//        // если референс найден среди главных объектов, то выходим
-//        if (isFindAmongMainObjects) {
-//            return
-//        }
+        // если референс найден среди главных объектов, то выходим
+        if (isFindAmongMainObjects) {
+            return
+        }
 
         if (oneCheckRefObj.nestedLevel == 1) {
 
@@ -470,8 +469,7 @@ object CheckObject {
             setNewIdFieldJson(
                 oneCheckRefObj.row.fields,
                 oneCheckRefObj.refObject,
-                oneConfClassRefObj,
-                if (isFindAmongMainObjects) 1 else 0
+                oneConfClassRefObj
             )
 
             // установка нового значения ссылочного поля в файле для референса типа refFields
@@ -479,16 +477,16 @@ object CheckObject {
                 oneCheckRefObj.row.fields,
                 oneCheckRefObj.refObject,
                 oneConfClassRefObj,
-                null,
-                if (isFindAmongMainObjects) 1 else 0
+                //jsonConfigFile,
+                null
             )
         }
 
-        // заменили значения ссылочных полей у референса
-        // если референс найден среди главных объектов, то выходим
-        if (isFindAmongMainObjects) {
-            return
-        }
+//        // заменили значения ссылочных полей у референса
+//        // если референс найден среди главных объектов, то выходим
+//        if (isFindAmongMainObjects) {
+//            return
+//        }
 
         // поиск референсного объекта в базе приемнике.
         // должен быть найден ровно один объект
@@ -1172,15 +1170,6 @@ object CheckObject {
                             if (fieldName != oneLinkObjClass.keyFieldIn && oneLinkObject.row.fields.find { it.fieldName == fieldName }!!.fieldValue != fieldValue &&
                                 oneLinkObjClass.scale?.find { it.refField == fieldName } == null
                             ) {
-
-//                                if (fieldName.equals("valid_to", true)) {
-//                                    val currentDate: LocalDate = LocalDate.now()
-//                                    val validToDate: LocalDate = LocalDate.parse(fieldValue, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-//                                    if (validToDate.isBefore(currentDate)){
-//                                        println(fieldValue)
-//                                    }
-//                                }
-
                                 logger.debug(
                                     CommonFunctions().createObjectIdForLogMsg(
                                         oneLinkObjClass.code,
@@ -1692,11 +1681,12 @@ object CheckObject {
 
     // установка нового значения ссылочного поля в файле для референса типа refFields
     private fun setNewIdRefFields(
+        //oneLoadObject: DataDB,
         oneLoadObjFields: List<Fields>,
         oneLoadObjRef: List<RefObject>,
         oneConfClassObj: ObjectCfg,
-        oneMainLoadObject: DataDB?, // главный объект, по которому проверяются linkObject. Заполняется только если проверяется объект из linkObject
-        isFindAmongMainObjects: Int // -1 значение не обрабатывается, 0 нет среди главных, 1 найден среди главных
+        //jsonConfigFile: RootCfg,
+        oneMainLoadObject: DataDB? // главный объект, по которому проверяются linkObject. Заполняется только если проверяется объект из linkObject
     ) {
         for (oneReferenceDescr in oneConfClassObj.refObjects) {
 
@@ -1754,15 +1744,17 @@ object CheckObject {
             // Для референса inchild нужно записать значение null, т.к. реальное значение еще неизвестно.
             // Также срабатывает в случае, когда для референса первого уровня в базе не найден референс второго уровня.
             //   При этом референса первого уровня нет среди главных объектов (эта проверка уже пройдена в checkOneRefObject)
-            if (idObjectInDB == "-" && !isSetNullValue && oneRefObject!!.typeRef.lowercase() != "inchild" && isFindAmongMainObjects != 1) {
+            if (idObjectInDB == "-" &&
+                ((!isSetNullValue && oneRefObject!!.typeRef.lowercase() != "inchild") || (oneRefObject!!.nestedLevel == 2))
+            ) {
                 logger.error(
                     CommonFunctions().createObjectIdForLogMsg(
                         oneConfClassObj.code,
                         oneConfClassObj.keyFieldOut,
                         oneLoadObjFields,
                         -1
-                    ) + "The reference(refField) object <$refField=${oneLoadObjFields.find { it.fieldName == refField }!!.fieldValue.toString()}>" +
-                            " was not found in the receiver database."
+                    ) + "The reference object <$refField=${oneLoadObjFields.find { it.fieldName == refField }!!.fieldValue.toString()}>" +
+                            " was not found in the receiver database. (refField)"
                 )
                 exitProcess(-1)
             }
@@ -1782,8 +1774,8 @@ object CheckObject {
     private fun setNewIdFieldJson(
         oneLoadObjFields: List<Fields>,
         oneLoadObjRef: List<RefObject>,
-        oneConfClassObj: ObjectCfg,
-        isFindAmongMainObjects: Int // -1 значение не обрабатывается, 0 нет среди главных, 1 найден среди главных
+        oneConfClassObj: ObjectCfg
+        //jsonConfigFile: RootCfg
     ) {
 
         // цикл по референсам типа refFieldsJson в классе (разные референсы могут храниться в разных полях)
@@ -1845,15 +1837,15 @@ object CheckObject {
 
                                     // Срабатывает в случае, когда для референса первого уровня в базе не найден референс второго уровня.
                                     // При этом референса первого уровня нет среди главных объектов (эта проверка уже пройдена в checkOneRefObject)
-                                    if (refFieldValueNew == "-" && oneRefObject.nestedLevel == 2 && isFindAmongMainObjects == 0) {
+                                    if (refFieldValueNew == "-" && oneRefObject.nestedLevel == 2) {
                                         logger.error(
                                             CommonFunctions().createObjectIdForLogMsg(
                                                 oneConfClassObj.code,
                                                 oneConfClassObj.keyFieldOut,
                                                 oneLoadObjFields,
                                                 -1
-                                            ) + "The reference(fieldJson) object <${oneRefObject.code}=${oneRefObject.row.fields.find { it.fieldName == oneRefFieldJsonClass.keyFieldOut }!!.fieldValue.toString()}>" +
-                                                    " was not found in the receiver database."
+                                            ) + "The reference object <${oneRefObject.code}=${oneRefObject.row.fields.find { it.fieldName == oneRefFieldJsonClass.keyFieldOut }!!.fieldValue.toString()}>" +
+                                                    " was not found in the receiver database. (fieldJson)"
                                         )
                                         exitProcess(-1)
                                     }
@@ -1935,16 +1927,14 @@ object CheckObject {
             setNewIdFieldJson(
                 oneLinkObject.row.fields,
                 oneLinkObject.row.refObject,
-                oneConfClassRefObj,
-                -1
+                oneConfClassRefObj
             )
             for (oneScaleObject in oneLinkObject.row.scaleObjects) {
                 oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneScaleObject.code }!!
                 setNewIdFieldJson(
                     oneScaleObject.row.fields,
                     oneScaleObject.row.refObject,
-                    oneConfClassRefObj,
-                    -1
+                    oneConfClassRefObj
                 )
             }
             bypassLinkObjSetNewIdFieldJson(oneLinkObject)
@@ -1963,8 +1953,8 @@ object CheckObject {
                 oneLinkObject.row.fields,
                 oneLinkObject.row.refObject,
                 oneConfClassRefObj,
-                oneCheckObject,
-                -1
+                //jsonConfigFile,
+                oneCheckObject
             )
             for (oneScaleObject in oneLinkObject.row.scaleObjects) {
                 oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneScaleObject.code }!!
@@ -1972,8 +1962,8 @@ object CheckObject {
                     oneScaleObject.row.fields,
                     oneScaleObject.row.refObject,
                     oneConfClassRefObj,
-                    oneCheckObject,
-                    -1
+                    //jsonConfigFile,
+                    oneCheckObject
                 )
             }
             bypassLinkObjSetNewIdRefField(oneLinkObject)

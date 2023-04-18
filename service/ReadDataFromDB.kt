@@ -3,7 +3,6 @@ package com.solanteq.service
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import org.slf4j.LoggerFactory
-import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.system.exitProcess
@@ -66,31 +65,31 @@ class ReaderDB {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    // Список ссылочных объектов для одного основного
+    // список ссылочных объектов для одного основного
     private var tblRefObject = mutableListOf<RefObject>()
 
-    // После выполнения readAllObject здесь будет список всех выкачиваемых объектов (в формате DataDB)
+    // после выполнения readAllObject здесь будет список всех выкачиваемых объектов (в формате DataDB)
     private var tblMain = mutableListOf<DataDB>()
 
-    // После выполнения readAllObject здесь будет список всех выкачиваемых объектов (в формате DataDB) + информация о версии конфигурации
+    // после выполнения readAllObject здесь будет список всех выкачиваемых объектов (в формате DataDB) + информация о версии конфигурации
     public var tblMainMain = DataDBMain(listOf<CfgList>(), listOf<DataDB>())
 
-    // После выполнения readAllObject здесь будет список объектов (TaskFileFields). Нужно для формирования файла заданий
+    // после выполнения readAllObject здесь будет список объектов (TaskFileFields). нужно для формирования файла заданий
     private var taskFileFields = mutableListOf<TaskFileFields>()
 
-    // После выполнения readAllObject здесь будет список объектов (TaskFileFields) + информация о версии конфигурации
+    // после выполнения readAllObject здесь будет список объектов (TaskFileFields) + информация о версии конфигурации
     public var taskFileFieldsMain = TaskFileFieldsMain(listOf<CfgList>(), listOf<TaskFileFields>())
 
-    // Список объектов, описанных в linkObject
+    // список объектов, описанных в linkObject
     private var tblLinkObject = mutableListOf<DataDB>()
 
-    // Список объектов, описанных в scaleObject
+    // список объектов, описанных в scaleObject
     private var tblScaleObject = mutableListOf<DataDB>()
 
-    // Создание файла заданий
+    // создание файла заданий
     fun readAllObject() {
 
-        // Считывание файла фильтра
+        // считывание файла фильтра
         var jsonConfigFilterFile: FilterCfg? = null
         if (FILTER_FILE != "") {
             jsonConfigFilterFile = readJsonFile.readConfigFilter()
@@ -158,6 +157,7 @@ class ReaderDB {
                 readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
             }
         }
+        //conn.close()
 
         val localDateTime = LocalDateTime.now()
         val datetimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -177,6 +177,11 @@ class ReaderDB {
 
     // формирование объектов на основе файла задания
     fun readTaskObjects() {
+
+        // считывание конфигурации
+        //val readJsonFile = ReadJsonFile()
+        //val jsonConfigFile = readJsonFile.readConfig()
+        //val jsonConfigFile = configJson.readJsonFile<RootCfg>(CONFIG_FILE)
 
         logger.info("Configuration info: " + jsonConfigFile.cfgList[0])
 
@@ -213,13 +218,13 @@ class ReaderDB {
         )
     }
 
-    //Формирование одного объекта
+    //формирование одного объекта
     private fun readOneObject(
         oneTaskObject: TaskFileFields?,
         oneConfigClass: ObjectCfg,
         jsonConfigFile: RootCfg,
-        scaleQuery: String, // Заполняется в случаи выгрузки шкал, в остальных случаях пусто. Может быть заполнено только в режиме save
-        linkObjectLevel: Int = 0 // Признак выгрузки массива linkObjects. Может принимать true только в режиме save, при выгрузке объектов linkObjects.
+        scaleQuery: String, // Заполняется в случаи выгрузки шкал, в остальных случаях пусто. может быть заполнено только в режиме save
+        linkObjectLevel: Int = 0 // признак выгрузки массива linkObjects. Может принимать true только в режиме save, при выгрузке объектов linkObjects.
     ) {
 
         // чтение таблицы
@@ -264,10 +269,7 @@ class ReaderDB {
                     continue
                 }
                 // значение поля таблицы
-                var fieldValue: String? = queryResult.getString(i)
-                if (queryResult.metaData.getColumnTypeName(i).equals("numeric", true)) {
-                    fieldValue = exponentialToText(fieldValue)
-                }
+                val fieldValue = queryResult.getString(i)
                 tblFields.add(Fields(fieldName, fieldValue))
             }
 
@@ -276,6 +278,7 @@ class ReaderDB {
 
                 readRefObject(oneConfigClass, jsonConfigFile, tblFields, linkObjectLevel, 1)
 
+                //if (!isSaveLinkObject && scaleQuery == "") {
                 if (linkObjectLevel == 0 && scaleQuery == "") {
                     tblMain.add(
                         DataDB(
@@ -308,7 +311,7 @@ class ReaderDB {
                     tblRefObject = mutableListOf<RefObject>()
                 }
 
-                // Выгрузка тарифных шкал. Шкалы выгружаются только для родительского класса numberTariffValue и tariffValue
+                // выгрузка тарифных шкал. шкалы выгружаются только для родительского класса numberTariffValue и tariffValue
                 readScaleObject(oneConfigClass, jsonConfigFile, tblFields, "Read", listOf<DataDB>())
                 if (scaleQuery != "") {
                     tblScaleObject.add(
@@ -360,7 +363,7 @@ class ReaderDB {
 
         // формирование однородного списка референсов для разных типов списков(списки refObjects, refFieldsJson, refTables)
         val refObjects =
-            createListToFindRefObjects(jsonCfgOneObj, tblFieldsOneObj, jsonCfgAllObj, linkObjectLevel)
+            createListToFindRefObjects(jsonCfgOneObj, tblFieldsOneObj, jsonCfgAllObj, nestedLevel, linkObjectLevel)
 
         // цикл по ссылкам класса
         for (itemRefObject in refObjects) {
@@ -421,10 +424,7 @@ class ReaderDB {
                             }
 
                             // значение поля таблицы
-                            var fieldValue: String? = resultFieldValue.getString(i)
-                            if (resultFieldValue.metaData.getColumnTypeName(i).equals("numeric", true)) {
-                                fieldValue = exponentialToText(fieldValue)
-                            }
+                            val fieldValue = resultFieldValue.getString(i)
 
                             // для объекта последнего уровня рекурсии будут считаны только два поля: идентификатор и код
                             if (nestedLevel == CommonConstants().NESTED_LEVEL_REFERENCE) {
@@ -447,6 +447,7 @@ class ReaderDB {
                             )
                         }
 
+                        //tblRefRow.add(RefRow(tblFields))
                         tblRefRow = RefRow(tblFields)
                         tblRefObjectLocal = RefObject(
                             jsonConfigObject.code,
@@ -654,6 +655,7 @@ class ReaderDB {
             refField = jsonConfigObject.keyFieldOut
         }
 
+        //val refFieldValue: String?
         val refFieldValue = findFieldValue(tblFieldsOneObj, itemRefObject)
 
         var fieldValueForLog = ""
@@ -716,6 +718,8 @@ class ReaderDB {
         jsonCfgOneObj: ObjectCfg,
         tblFieldsOneObj: List<Fields>,
         jsonCfgAllObj: RootCfg,
+        //isSaveLinkObject: Boolean,
+        nestedLevel: Int,
         linkObjectLevel: Int
     ): List<RefObjects> {
 
@@ -734,6 +738,7 @@ class ReaderDB {
         for (itemRefObject in listItemRefObject) {
 
             // при выгрузке объектов linkObjects не обрабатываем референсы на главный объект(тот, по которому выгружаем linkObjects), иначе будет кольцо
+            //if (isSaveLinkObject && itemRefObject.codeRef == tblMain[tblMain.lastIndex].code) {
             if (linkObjectLevel > 0 &&
                 (itemRefObject.codeRef == tblMain.last().code ||
                         (tblLinkObject.isNotEmpty() && tblLinkObject.last().code == itemRefObject.codeRef))
@@ -902,9 +907,9 @@ class ReaderDB {
                 continue
             }
 
-            // Нужно найти название поля для соединения с таблицей класса искомого объекта(ов).
-            // Название поля есть в refTables связанного класса
-            // В новом варианте конфигурации появилось поле refFieldTo в refTables
+            // нужно найти название поля для соединения с таблицей класса искомого объекта(ов).
+            // название поля есть в refTables связанного класса
+            // в новом варианте конфигурации появилось поле refFieldTo в refTables
             val linkFieldName =
                 if (oneLinkRefObj.refFieldTo != "") {
                     oneLinkRefObj.refFieldTo
@@ -936,7 +941,7 @@ class ReaderDB {
             )
 
             // Запрос строится к БД, в которой находится референсный объект типа refTables.
-            // Например, для главного объекта mccGroup запрос к его refTables класса mcc будет построен к БД, указанной в классе mcc.
+            // Например, для главного объекта mccGroup запрос к его refTables класса mсс будет построен к БД, указанной в классе mcc.
             // При запуске приложения есть проверка того, что объект и его референсы refTables находятся в одной БД, т.е. объекты mccGroup и mcc в одной БД.
             val conn = DatabaseConnection.getConnection(javaClass.toString(), jsonCfgAllObj.objects[indObj].aliasDb)
             val queryFieldValue = conn.prepareStatement(sqlFieldValue)
@@ -977,7 +982,7 @@ class ReaderDB {
         return refObjects
     }
 
-    // Поиск значения ссылочного поля
+    // поиск значения ссылочного поля
     private fun findFieldValue(
         tblFieldsOneObj: List<Fields>,
         itemRefObject: RefObjects
@@ -993,7 +998,7 @@ class ReaderDB {
         return refFieldValue
     }
 
-    // Если в классе объекта в keyFieldOut указано поле, которое при этом является ссылкой типа refObjects,
+    // если в классе объекта в keyFieldOut указано поле, которое при этом является ссылкой типа refObjects,
     // то считаю, что такой объект нельзя проверить
     fun checkFldOutForLink(
         oneConfigClass: ObjectCfg,
@@ -1021,7 +1026,7 @@ class ReaderDB {
         }
     }
 
-    // Выгрузка linkObject.keyType=InGroup. Выгружаются как подчиненные объекты
+    // выгрузка linkObject.keyType=InGroup. выгружаются как подчиненные объекты
     private fun readLinkObjectInGroup(
         oneConfigClass: ObjectCfg,     // один класс из конфига
         jsonConfigFile: RootCfg,       // все классы из конфига
@@ -1030,6 +1035,7 @@ class ReaderDB {
     ) {
 
         if (oneConfigClass.linkObjects.isNotEmpty()) {
+            //for (oneCfgLinkObj in oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" || it.keyType.lowercase() == "in" }) {
             for (oneCfgLinkObj in oneConfigClass.linkObjects) {
                 val oneCfgLinkObjClass = jsonConfigFile.objects.find { it.code == oneCfgLinkObj.codeRef }!!
 
@@ -1037,7 +1043,7 @@ class ReaderDB {
 
                 val lstKeyFieldInValue =
                     getOneFieldFromRefField(tblFieldsOneObj, oneConfigClass, oneConfigClass.keyFieldIn)
-                // У вложенного linkObject может быть пустое keyFieldOut, в этом случае его не обрабатываем
+                // у вложенного linkobject может быть пустое keyFieldOut, в этом случае его не обрабатываем
                 var lstKeyFieldOutValue = listOf<Fields>()
                 if (linkObjectLevel == 0 || oneConfigClass.keyFieldOut != "") {
                     lstKeyFieldOutValue =
@@ -1053,7 +1059,7 @@ class ReaderDB {
     }
 
 
-    // Выгрузка scaleObjects. Выгружаются как подчиненные объекты
+    // выгрузка scaleObjects. выгружаются как подчиненные объекты
     public fun readScaleObject(
         oneConfigClass: ObjectCfg,     // один класс из конфига
         jsonConfigFile: RootCfg,       // все классы из конфига
@@ -1068,8 +1074,9 @@ class ReaderDB {
             tblFieldsOneObj.find { it.fieldName == scalable.scaleComponentFieldName }!!.fieldValue != null
         ) {
 
-            // выгрузка объектов scaleComponent. Ссылка по референсу с keyType=InScaleComponent из класса numberTariffValue или tariffValue
+            // выгрузка объектов scaleComponent. Ссылка по референсу с keyType=InScaleComponent из класса numbertariffvalue или tariffvalue
             val trfValueScaleObjects = oneConfigClass.scale
+            //oneConfigClass.scale.let { trfValueScaleObjects ->
             val trfValueScaleReference =
                 trfValueScaleObjects.find { it.keyType == "InScaleComponent" }
             trfValueScaleReference?.let { trfValueScaleRef ->
@@ -1098,8 +1105,8 @@ class ReaderDB {
                     readOneObject(taskObject, scaleComponentClass, jsonConfigFile, sqlQuery, 0)
                 } else if (objectEvent == "Load") {
 
-                    // Проверка scaleObjects
-                    // Для объектов класса scaleComponent не нужна проверка. Там нет значимых полей
+                    // проверка scaleObjects
+                    // для объектов класса scaleComponent не нужна проверка. там нет значимых полей
                     val isAddScaleObjects =
                         compareScaleObjects(
                             sqlQuery,
@@ -1113,7 +1120,7 @@ class ReaderDB {
                     }
                 }
 
-                // Выгрузка объектов scaleComponentValue. Ссылка по референсу с keyType=InScaleComponentValue из класса scaleComponent
+                // выгрузка объектов scaleComponentValue. Ссылка по референсу с keyType=InScaleСomponentValue из класса scaleComponent
                 scaleComponentClass.scale?.let { scaleComponentScaleObjects ->
                     val scaleComponentReference =
                         scaleComponentScaleObjects.find { it.keyType == "InScaleComponentValue" }
@@ -1148,7 +1155,7 @@ class ReaderDB {
                                 return false
                             }
                         }
-                        // Выгрузка объектов scalableAmount. Ссылка по референсу с keyType=InScalableAmount из класса scaleComponentValue
+                        // выгрузка объектов scalableAmount. Ссылка по референсу с keyType=InScalableAmount из класса scaleComponentValue
                         scaleComponentValueClass.scale?.let { scaleComponentValueScaleObjects ->
                             val scaleAmountReference =
                                 scaleComponentValueScaleObjects.find { it.keyType == "InScalableAmount" }
@@ -1190,9 +1197,123 @@ class ReaderDB {
                     }
                 }
             }
+            //}
         }
         return true
     }
+
+    /* НЕ УДАЛЯТЬ*/
+    // выгрузка linkObject.keyType=In. объекты linkObject.keyType=In выгружаются как главные объекты
+    // в первую очередь сделано для выгрузки всех тарифов для тарифной группы, указанной в файле заданий с "loadMode": "Safe.linkobjects"
+    /*private fun readLinkObjectIn(     /* НЕ УДАЛЯТЬ*/
+        oneTaskObject: TaskFileFields,
+        oneConfigClass: ObjectCfg, // класс из конфигурации
+        jsonConfigFile: RootCfg,
+        oneLinkObjectIn: LinkObjects // референс linkObjects.keyType=In
+    ) {
+
+        /*
+        При выгрузке данных может возникнуть необходимость выгрузить все(или все измененные) объекты определенного типа.
+        Например, все тарифы относящиеся к указанной тарифной группе. Если формировать файл задания в режиме -dc получаем все измененные объекты
+        описанные в файле конфигурации. В некоторых случаях может быть неудобно.
+        Предлагается:
+        анализировать связь linkObjects.keyType=In, только в случае указания в файле задания режима "loadMode": "Safe.linkObjects"
+        При выгрузке данных анализировать настройку и для "keyType": "In" в linkObjects выгружать все объекты найденные по этой связи как основные объекты.
+        В данном случае это все связанные с объектом тарифы. Подчиненные по связи "keyType": "InGroup" выгружаем как вложенные.
+        Проверка по дате стандартная для файла задания.
+        */
+
+        var sqlQuery = ""
+        val aliasTableLinkObj = "trf"
+        val aliasTableLinkObjDop = "trf_dop"
+
+        // класс объекта oneLinkObjectIn
+        val oneLinkObjectInClass =
+            jsonConfigFile.objects[jsonConfigFile.objects.indexOfFirst { it.code == oneLinkObjectIn.codeRef }]
+
+        val tableName = oneLinkObjectInClass.tableName
+
+        // формирование запроса для поиска всех linkObjects.keyType="In" для главного объекта oneTaskObject
+        val auditDateObjCond =
+            " and $aliasTableLinkObj.${oneLinkObjectInClass.auditDateField} > to_timestamp(' $AUDIT_DATE ','YYYY-MM-DD') "
+        var filterObjCond = ""
+        if (oneLinkObjectInClass.filterObjects != "") {
+            filterObjCond = " and ${oneLinkObjectInClass.filterObjects} "
+        }
+
+        val mainObjId = oneTaskObject.keyFieldIn.find { it.fieldName == oneConfigClass.keyFieldIn }!!.fieldValue
+
+        val linkFieldForMainTable = oneLinkObjectIn.refField
+        val dopCondForMainObjId = " and $aliasTableLinkObj.$linkFieldForMainTable=$mainObjId "
+
+        if (oneConfigClass.linkObjects.filter { it.keyType.lowercase() == "in" }.isNotEmpty()
+        ) {
+            sqlQuery =
+                "\nselect ${oneConfigClass.keyFieldIn},${oneConfigClass.keyFieldOut} from  $tableName $aliasTableLinkObj where audit_state = 'A' $filterObjCond $dopCondForMainObjId and ${oneConfigClass.keyFieldIn} in (\n"
+            sqlQuery += "select ${oneConfigClass.keyFieldIn} from $tableName $aliasTableLinkObj where audit_state = 'A' $auditDateObjCond $filterObjCond $dopCondForMainObjId \n"
+
+            for (oneCfgLinkObj in oneLinkObjectInClass.linkObjects.filter { it.keyType.lowercase() == "ingroup" }) {
+
+                val oneCfgLinkObjClass = jsonConfigFile.objects.find { it.code == oneCfgLinkObj.codeRef }!!
+
+                var filterObjCondLink = ""
+                if (oneCfgLinkObjClass.filterObjects != "") {
+                    filterObjCondLink = " and ${oneCfgLinkObjClass.filterObjects} "
+                }
+
+                val auditDAteObjCondLink =
+                    " and $aliasTableLinkObjDop.${oneCfgLinkObjClass.auditDateField} > to_timestamp(' $AUDIT_DATE ','YYYY-MM-DD') "
+
+                sqlQuery += "union \n select $aliasTableLinkObjDop.${oneCfgLinkObj.refField} \n" +
+                        "  from ${oneCfgLinkObjClass.tableName} $aliasTableLinkObjDop \n" +
+                        "  join $tableName $aliasTableLinkObj on $aliasTableLinkObj.${oneConfigClass.keyFieldIn}=$aliasTableLinkObjDop.${oneCfgLinkObj.refField} $dopCondForMainObjId \n" +
+                        " where $aliasTableLinkObjDop.audit_state = 'A' $auditDAteObjCondLink $filterObjCondLink \n "
+            }
+            sqlQuery += ") " + "order by id"
+        }
+
+        logger.trace(
+            CommonFunctions().createObjectIdForLogMsg(
+                oneConfigClass.code,
+                oneConfigClass.keyFieldIn,
+                oneTaskObject.keyFieldIn,
+                -1
+            ) + "Query to the linkObject with keyType=In, class <${oneLinkObjectInClass.code}>: $sqlQuery"
+        )
+
+        //поиск объектов linkObject.keyType=In для выгрузки
+        // объекты linkObject должны быть в той же БД что и главный объект. Это проверяется при запуске приложения
+        val conn = DatabaseConnection.getConnection(javaClass.toString(),oneConfigClass.aliasDb)
+        val queryFieldValue = conn.prepareStatement(sqlQuery)
+        val resultQuery = queryFieldValue.executeQuery()
+
+        while (resultQuery.next()) {
+
+            val tblFields = mutableListOf<Fields>()
+            for (i in 1..resultQuery.metaData.columnCount) {
+                // название поля таблицы
+                val fieldName = resultQuery.metaData.getColumnName(i)
+                // исключение из результирующего массива не нужных полей
+                if (oneConfigClass.fieldsNotExport.find { it.name == fieldName } != null) {
+                    continue
+                }
+                // значение поля таблицы
+                val fieldValue = resultQuery.getString(i)
+                tblFields.add(Fields(fieldName, fieldValue))
+            }
+            val lstKeyFieldInValue =
+                getOneFieldFromRefField(tblFields, oneLinkObjectInClass, oneLinkObjectInClass.keyFieldIn)
+            val lstKeyFieldOutValue =
+                getOneFieldFromRefField(tblFields, oneLinkObjectInClass, oneLinkObjectInClass.keyFieldOut)
+            val taskObject =
+                TaskFileFields(oneLinkObjectInClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
+
+            //readOneObject(taskObject, oneLinkObjectInClass, jsonConfigFile, false, "")
+            readOneObject(taskObject, oneLinkObjectInClass, jsonConfigFile, "", 0)
+        }
+        queryFieldValue.close()
+        //conn.close()
+    }*/
 
     private fun compareScaleObjects(
         sqlQuery: String,
@@ -1206,6 +1327,7 @@ class ReaderDB {
         var scaleOneObjectFieldsFromDB = mutableListOf<Fields>()
 
         var iRowCount = 0 // кол-во записей класса scaleConfigClass в БД
+        //val connCompare = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
         val connCompare = DatabaseConnection.getConnection(javaClass.toString(), scaleClass.aliasDb)
         logger.trace(
             CommonFunctions().createObjectIdForLogMsg(
@@ -1231,9 +1353,10 @@ class ReaderDB {
                 // значение поля таблицы
                 val fieldValue = queryResult.getString(i)
 
-                // для объектов scalableAmount проверяю на совпадение кроме прочего еще и значение поля scale_id
+                // для объектов scalableamount проверяю на совпадение кроме прочего еще и значение поля scale_id
                 if (scaleClass.fieldsNotExport.find { it.name == fieldName } == null &&
                     ((scaleClass.scale!!.find { it.refField == fieldName } == null) ||
+                            //((fieldName.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME) && scaleClass.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME))
                             ((fieldName.lowercase() == scaleIdFieldName) && scaleClass.code.lowercase() == scaleAmountClassName))
 
                 ) {
@@ -1244,6 +1367,7 @@ class ReaderDB {
             scaleOneObjectFieldsFromDB = mutableListOf<Fields>()
             iRowCount++
         }
+        //connCompare.close()
 
         var scaleObjectFromId = ""
         var scaleObjectFromFileFieldName = ""
@@ -1263,6 +1387,7 @@ class ReaderDB {
                     if (fieldNameFromFile != scaleClass.keyFieldIn &&
                         fieldNameFromFile.lowercase() != scaleCompFieldName &&
                         ((scaleClass.scale!!.find { it.refField == fieldNameFromFile } == null)
+                                //|| (fieldNameFromFile.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME) && scaleClass.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME) &&
                                 || (fieldNameFromFile.lowercase() == scaleIdFieldName) && scaleClass.code.lowercase() == scaleAmountClassName) &&
                         fieldsFromDB.find { it.fieldName == fieldNameFromFile }!!.fieldValue != fieldValueFromFile
                     ) {
@@ -1281,7 +1406,7 @@ class ReaderDB {
                     break
                 }
             }
-            // Если после сравнения строки из файла isRowEqual=false, то в БД не нашлось соответствия. Дальнейшие проверки не нужны
+            // если после сравнения строки из файла isRowEqual=false, то в БД не нашлось соответствия. дальнейшие проверки не нужны
             if (!isRowEqual) {
                 break
             }
@@ -1301,22 +1426,23 @@ class ReaderDB {
             return false
         }
 
-        // Каждую запись из БД сравниваю с записью из файла
+        // каждую запись из БД сравниваю с записью из файла
         isRowEqual = true
         scaleObjectFromId = ""
-        // Цикл по объектам БД
+        // цикл по объектам БД
         for (fieldsFromDB in scaleObjectFieldsFromDB) {
-            // Цикл по объектам файла
+            // цикл по объектам файла
             for (oneScaleObject in scaleObjects.filter { it.code == scaleClass.code }) {
 
                 isRowEqual = true
-                // Цикл по полям строки файла
+                // цикл по полям строки файла
                 for ((fieldNameFromDB, fieldValueFromDB) in fieldsFromDB) {
 
-                    // Значение каждого поля из БД сравниваю со значением такого же поля из файла
+                    // значение каждого поля из БД сравниваю со значением такого же поля из файла
                     if (fieldNameFromDB != scaleClass.keyFieldIn &&
                         fieldNameFromDB.lowercase() != scaleCompFieldName &&
                         ((scaleClass.scale!!.find { it.refField == fieldNameFromDB } == null)
+                                //|| (fieldNameFromDB.lowercase() == CommonConstants().SCALE_ID_FIELD_NAME) && scaleClass.code.lowercase() == CommonConstants().SCALE_AMOUNT_CLASS_NAME) &&
                                 || (fieldNameFromDB.lowercase() == scaleIdFieldName) && scaleClass.code.lowercase() == scaleAmountClassName) &&
                         oneScaleObject.row.fields.find { it.fieldName == fieldNameFromDB }!!.fieldValue != fieldValueFromDB
                     ) {
@@ -1325,17 +1451,17 @@ class ReaderDB {
                                 fieldsFromDB.find { it.fieldName == scaleClass.keyFieldIn }!!.fieldValue!!
                             scaleObjectFromFileFieldName = fieldNameFromDB
                         }
-                        //Если значение поля из БД не совпало со значением из файла, то поиск по следующей строке из файла
+                        //если значение поля из БД не совпало со значением из файла, то поиск по следующей строке из файла
                         isRowEqual = false
                         break
                     }
                 }
-                // Если строка из БД совпала со строкой из файла, то переходим к проверке следующей строки из БД
+                // если строка из БД совпала со строкой из файла, то переходим к проверке следующей строки из БД
                 if (isRowEqual) {
                     break
                 }
             }
-            // Если после сравнения строки из БД isRowEqual=false, то в файле не нашлось соответствия
+            // если после сравнения строки из БД isRowEqual=false, то в файле не нашлось соответствия
             if (!isRowEqual) {
                 break
             }
@@ -1404,17 +1530,4 @@ class ReaderDB {
         }
     }
 
-    // Преобразует экспоненциальную форму числа в десятичную с сохранением конечных нулей
-    // Например преобразует строку 0E-10 в строку 0.0000000000
-    private fun exponentialToText(fieldValue: String?): String? {
-        var fieldValueLoc = fieldValue
-        if (fieldValueLoc != null && fieldValueLoc.contains(Regex("[eE]"))) {
-            try {
-                fieldValueLoc = BigDecimal(fieldValueLoc).toPlainString()
-            } catch (ignored: Exception) {
-            }
-        }
-
-        return fieldValueLoc
-    }
 }
