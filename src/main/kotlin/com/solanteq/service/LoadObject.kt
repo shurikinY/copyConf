@@ -8,7 +8,7 @@ data class DataObjectDest(
     val code: String,  // название класса из конфигурации
     val id: String,         // значение поля refFieldId из базы источника
     val idDest: String,      // значение поля refFieldId из базы приемника
-    val listChildRef: List<Fields> // значение референсных полей типа InChild
+    var listChildRef: List<Fields> // значение референсных полей типа InChild
 )
 
 // класс используется для хранения данных о добавленных измеряемых величинах шкалы в рамках одного тарифа
@@ -17,26 +17,12 @@ data class ScaleAmountInDB(
     var newId: String
 )
 
-//class LoadObject(allLoadObjectMain: DataDBMain) {
 object LoadObject {
 
-    //private val allLoadObject = allLoadObjectMain
     public lateinit var allLoadObject: DataDBMain
 
     // действие при загрузке для каждого объекта из файла: добавление/обновление/пропуск
     public lateinit var listOfActionWithObject: MutableList<ActionWithObject>
-
-    // коннект к БД
-    //public lateinit var conn: Connection
-    //public val conn: Connection = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-
-    /*// Объект из файла:
-    // 0 - полностью совпадает с объектом из БД
-    // 1 - подлежит замене в БД
-    // 2 - добавлен в БД
-    val OBJECT_TO_SKIP = 0
-    val OBJECT_TO_UPDATE = 1
-    val OBJECT_TO_INSERT = 2*/
 
     // считывание конфигурации
     private val readJsonFile = ReadJsonFile()
@@ -44,44 +30,38 @@ object LoadObject {
 
     private val scalable = Scalable(jsonConfigFile)
 
-    //private val readerDB = ReaderDB()
-
-    //private val checkObject = CheckObject(allLoadObject)
     private val checkObject = CheckObject
 
     private val createReport = CreateReport()
 
-    // список найденных объектов файла в БД приемнике
+    // Список идентификаторов объектов из файла и соответствующих им идентификаторов в БД приемнике
     private var dataObjectDestList = mutableListOf<DataObjectDest>()
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    //private var listNewScalableAmountObject = mutableListOf<ScaleAmountInDB>()
+    fun getDataObjectDestList(): List<DataObjectDest> {
+        return dataObjectDestList
+    }
+
+    fun addDataObjectDestList(dataObject: DataObjectDest) {
+        dataObjectDestList.add(dataObject)
+    }
 
     fun loadDataObject() {
 
         // считывание конфигурации
-        //val readJsonFile = ReadJsonFile()
-        //val jsonConfigFile = readJsonFile.readConfig()
         logger.info("Configuration info: " + jsonConfigFile.cfgList[0])
 
         // формирования списка полей, которые не нужно выгружать, для каждого класса
         CommonFunctions().createListFieldsNotExport(jsonConfigFile)
-
-        // считывание файла объектов
-        //val allLoadObject = readJsonFile.readObject()
 
         // проверка версии и названия конфигурационного файла и файла с объектами
         if (jsonConfigFile.cfgList[0].version != allLoadObject.cfgList[0].version ||
             jsonConfigFile.cfgList[0].cfgName != allLoadObject.cfgList[0].cfgName
         ) {
             logger.error("Different versions or cfgName of Configuration File and Object File.")
-            //exitProcess(-1)
             exitFromProgram()
         }
-
-        // установка соединения с БД
-        //conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
 
         // цикл по главным объектам (главные объекты это объекты, которые нужно загрузить в БД).
         // если главный объект успешно загружен, то добавляю в список его полей Fields("@isLoad","1")
@@ -97,8 +77,7 @@ object LoadObject {
                 allLoadObject.element
             )
         }
-        createQueryForFamilyObject(/*allLoadObject, jsonConfigFile*/)
-        //conn.close()
+        createQueryForFamilyObject()
 
         createReport.writeReportOfProgramExecution("load")
     }
@@ -129,7 +108,7 @@ object LoadObject {
             if (indexInAllLoadObject > -1) {
 
                 // референсы подобного типа пропускаю, т.к. они заведомо закольцованы и при загрузке обрабатываются отдельным образом
-                if (/*oneRefObject.typeRef.lowercase() == "inparent" ||*/ oneRefObject.typeRef.lowercase() == "inchild") {
+                if (oneRefObject.typeRef.lowercase() == "inchild") {
                     continue
                 }
 
@@ -201,33 +180,6 @@ object LoadObject {
                     }
                 }
             }
-
-            /*for (oneScaleObject in oneLoadObject.row.scaleObjects) {
-                for (oneRefObject in oneScaleObject.row.refObject) {
-                    // поиск описания класса референсного объекта в файле конфигурации
-                    val oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneRefObject.code }!!
-
-                    // поиск референсного объекта среди главных объектов.
-                    // если indexInAllLoadObject > -1, то референсный объект найден среди главных
-                    val indexInAllLoadObject =
-                        //CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
-                        checkObject.findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
-
-                    // нашли референсный объект среди главных объектов. теперь проверка референсов найденного главного объекта
-                    if (indexInAllLoadObject > -1) {
-
-                        chainLoadObject.add(allLoadObject[indexInAllLoadObject])
-
-                        // рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
-                        loadOneObject(
-                            chainLoadObject,
-                            oneConfClassRefObj,
-                            jsonConfigFile,
-                            allLoadObject
-                        )
-                    }
-                }
-            }*/
         }
 
         for (oneScaleObject in oneLoadObject.row.scaleObjects) {
@@ -288,8 +240,8 @@ object LoadObject {
         jsonConfigFile: RootCfg
     ) {
 
-        var sqlQueryObjMain: String = ""
-        var sqlQueryRefTables: String = ""
+        var sqlQueryObjMain = ""
+        var sqlQueryRefTables = ""
         val sqlQuery: String
         val nextValueRevName = "nextValueRev"
         var sqlQueryInsertScale = ""
@@ -302,6 +254,7 @@ object LoadObject {
             listOfActionWithObject.find { it.classCode == oneLoadObject.code && it.id == oneLoadObject.row.fields.find { fields -> fields.fieldName == oneConfClassObj.keyFieldIn }!!.fieldValue!! }
 
         // получаю идентификатор объекта в базе приемнике, либо генерю новый
+
         val idObjectInDB = getObjIdInDB(oneLoadObject.row.fields, oneConfClassObj, 0, true)
 
         // если у класса есть шкала, то работаем с ней
@@ -434,7 +387,6 @@ object LoadObject {
                 "The object has been skipped."
         )
 
-        //createReportOfProgramExecution(oneConfClassObj.code, actionWithMainObject)
         createReport.createSummaryReport(oneConfClassObj.code, actionWithObject)
 
     }
@@ -447,8 +399,7 @@ object LoadObject {
     ) {
 
         try {
-            //val connect = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-            val connect = DatabaseConnection.getConnection(javaClass.toString(),oneConfClassObj.aliasDb)
+            val connect = DatabaseConnection.getConnection(javaClass.toString(), oneConfClassObj.aliasDb)
             connect.autoCommit = false
             val queryStatement = connect.prepareStatement(sqlQuery)
             logger.trace(
@@ -458,13 +409,11 @@ object LoadObject {
                     oneLoadObject.row.fields,
                     -1
                 ) + "Query to load object into <${DatabaseConnection.getAliasConnection(oneConfClassObj.aliasDb)}> : $sqlQuery"
-            // (connect as PgConnection).url - строка базы для подключения
             )
             queryStatement.executeUpdate()
             connect.commit()
             //connect.rollback()
             queryStatement.close()
-            //connect.close()
         } catch (e: Exception) {
             logger.error(
                 CommonFunctions().createObjectIdForLogMsg(
@@ -501,7 +450,6 @@ object LoadObject {
 
                 if (allLoadObject != null && typeLoadObject == "mainObject") {
                     val indexInAllCheckObject =
-                        //CheckObject().findRefObjAmongMainObj(oneRefTables, oneRefLinkClass, allLoadObject)
                         checkObject.findRefObjAmongMainObj(oneRefTables, oneRefLinkClass, allLoadObject)
                     if (indexInAllCheckObject > -1) {
 
@@ -572,7 +520,6 @@ object LoadObject {
                     }
                 }
             }
-            //listColNameEqualValue = "am."+listColNameColValue.replace(", ", " and am.").substringBeforeLast("and am.")
             listColNameEqualValue = listColNameEqualValue.substringBeforeLast("and")
 
             listColNameColValue += "${oneConfClassObj.auditDateField}=dateNow,audit_user_id='42'"
@@ -600,7 +547,7 @@ object LoadObject {
                     "where table_name = '${oneConfClassObj.tableName}' and column_name not in('rev','revtype')" +
                     "order by ordinal_position"
 
-            val conn = DatabaseConnection.getConnection(javaClass.toString(),oneConfClassObj.aliasDb)
+            val conn = DatabaseConnection.getConnection(javaClass.toString(), oneConfClassObj.aliasDb)
             val queryStatement = conn.prepareStatement(sqlQueryLocal)
             val queryResult = queryStatement.executeQuery()
             // формирование массива из ResultSet
@@ -633,13 +580,11 @@ object LoadObject {
                         " join ${scalableAmountClass.tableName} am on am.${scalableAmountClass.keyFieldIn} = val.${scalable.scalableAmountFieldName} " +
                         " where $listColNameEqualValue; \n"
             }
-        }
-        else if (regimQuery == "selectCountLinkObject") {
+        } else if (regimQuery == "selectCountLinkObject") {
             sqlQuery = "select count(id) over() " +
                     "from ${oneConfClassObj.tableName} am " +
                     "where $listColNameEqualValue and audit_state='A';"
-        }
-        else {
+        } else {
             sqlQuery = "update ${oneConfClassObj.tableName} set $listColNameColValue " +
                     "where ${oneConfClassObj.keyFieldIn}='$idObjectInDB'; \n"
 
@@ -658,14 +603,23 @@ object LoadObject {
         var idObjectInDB = "-"
         val refFieldIdValue = objFieldsList.find { it.fieldName == oneConfigClass.keyFieldIn }!!.fieldValue!!
 
-        // поиск объекта в списке ранее найденных объектов в бд приемнике
-        val dataObjectDest = dataObjectDestList.find { it.code == oneConfigClass.code && it.id == refFieldIdValue }
-        dataObjectDest?.let {
-            idObjectInDB = it.idDest
-            return idObjectInDB
-        }
+        // Поиск в файле у загружаемого объекта идентификатора референса типа keyType=InChild
+        // Один и тот же референс может быть описан с keyType=InChild и keyType=In
+        val listChildRef = getInChildIdForInParentObject(objFieldsList, oneConfigClass, refFieldIdValue, nestedLevel)
 
-        //val checkObject = CheckObject()
+        // Поиск объекта в списке ранее найденных объектов в БД приемнике.
+        // Если объект найден, то выход и возврат идентификатора объекта в БД приемнике.
+        val dataObjectDest = dataObjectDestList.find { it.code == oneConfigClass.code && it.id == refFieldIdValue }
+        if (dataObjectDest != null) {
+            if (listChildRef.isNotEmpty() && dataObjectDest.listChildRef.isEmpty()) {
+                // Запись идентификатора референса keyType=InChild вместе с идентификатором его родителя.
+                // Например, для объекта classifierType будет запомнен идентификатор его референса classifierValue в следующем виде:
+                //   DataObjectDest(code=classifierType, id=100009, idDest=100582, listChildRef=[Fields(fieldName=default_value_id, fieldValue=100018)])
+                //   Где 100009/100582 ид объекта classifierType в файле/в БД, 100018 ид объекта classifierValue из файла
+                dataObjectDest.listChildRef = listChildRef
+            }
+            return dataObjectDest.idDest
+        }
 
         // поиск объекта в БД
         idObjectInDB = checkObject.findObjectInDB(objFieldsList, oneConfigClass, -1)
@@ -675,32 +629,53 @@ object LoadObject {
             idObjectInDB = nextSequenceValue(oneConfigClass)
         }
 
-        // добавляю объект в список уже найденных в бд приемнике
-        if (idObjectInDB != "-" &&
-            //!dataObjectDestList.contains(DataObjectDest(oneConfigClass.code, refFieldIdValue, idObjectInDB))
-            dataObjectDestList.find { it.code == oneConfigClass.code && it.id == refFieldIdValue && it.idDest == idObjectInDB } == null
-        ) {
-            val listChildRef = mutableListOf<Fields>()
-            if (oneConfigClass.refObjects.find { it.keyType.lowercase() == "inchild" } != null && nestedLevel < 2) {
-                for (oneRefObjInChildDescr in oneConfigClass.refObjects.filter { it.keyType.lowercase() == "inchild" }) {
-                    if (objFieldsList.find { it.fieldName == oneRefObjInChildDescr.refField }!!.fieldValue != null) {
-                        listChildRef.add(
-                            Fields(
-                                oneRefObjInChildDescr.refField,
-                                objFieldsList.find { it.fieldName == oneRefObjInChildDescr.refField }!!.fieldValue!!
-                            )
-                        )
-                    }
-                }
-            }
-            // запоминаю только главные объекты и референсы 1 уровня. референсы 2 уровня запоминаю только если у их класса нет рефернсов inchild
-            if (nestedLevel < 2 || (oneConfigClass.refObjects.find { it.keyType.lowercase() == "inchild" } == null && nestedLevel == 2)) {
-                dataObjectDestList.add(DataObjectDest(oneConfigClass.code, refFieldIdValue, idObjectInDB, listChildRef))
-            }
+        // Добавление в список пары идентификаторов: из файла/ из БД приемника
+        if (idObjectInDB != "-") {
+            dataObjectDestList.add(DataObjectDest(oneConfigClass.code, refFieldIdValue, idObjectInDB, listChildRef))
         }
 
         return idObjectInDB
     }
+
+//  26.04.2023 ПОКА НЕ УДАЛЯТЬ
+//    // получаю идентификатор объекта в базе приемнике, либо генерю новый
+//    public fun getObjIdInDB(
+//        objFieldsList: List<Fields>,
+//        oneConfigClass: ObjectCfg,
+//        nestedLevel: Int,
+//        isGenerateNewSeqValue: Boolean = true
+//    ): String {
+//
+//        var idObjectInDB = "-"
+//        val refFieldIdValue = objFieldsList.find { it.fieldName == oneConfigClass.keyFieldIn }!!.fieldValue!!
+//
+//        // поиск объекта в списке ранее найденных объектов в бд приемнике
+//        val dataObjectDest = dataObjectDestList.find { it.code == oneConfigClass.code && it.id == refFieldIdValue }
+//        dataObjectDest?.let {
+//            idObjectInDB = it.idDest
+//            return idObjectInDB
+//        }
+//
+//        // поиск объекта в БД
+//        idObjectInDB = checkObject.findObjectInDB(objFieldsList, oneConfigClass, -1)
+//
+//        // генерация нового значения id, если объект не был найден в бд
+//        if (idObjectInDB == "-" && isGenerateNewSeqValue) {
+//            idObjectInDB = nextSequenceValue(oneConfigClass)
+//        }
+//
+//        if (idObjectInDB != "-" &&
+//            dataObjectDestList.find { it.code == oneConfigClass.code && it.id == refFieldIdValue && it.idDest == idObjectInDB } == null
+//        ) {
+//            val listChildRef = getInChildIdForInParentObject(objFieldsList, oneConfigClass, refFieldIdValue, nestedLevel)
+//            // Запоминаю только главные объекты и референсы 1 уровня. Референсы 2 уровня запоминаю только если у их класса нет референсов inchild.
+//            if (nestedLevel < 2 || (oneConfigClass.refObjects.find { it.keyType.lowercase() == "inchild" } == null && nestedLevel == 2)) {
+//                dataObjectDestList.add(DataObjectDest(oneConfigClass.code, refFieldIdValue, idObjectInDB, listChildRef))
+//            }
+//        }
+//
+//        return idObjectInDB
+//    }
 
     // получить следующее значение последовательности postgresql
     public fun nextSequenceValue(oneConfClassObj: ObjectCfg): String {
@@ -708,23 +683,19 @@ object LoadObject {
         val sequence = oneConfClassObj.sequence
 
         val sqlQuery = "SELECT nextval('${sequence}')"
-        //val connNextSequence = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-        val connNextSequence = DatabaseConnection.getConnection(javaClass.toString(),oneConfClassObj.aliasDb)
+        val connNextSequence = DatabaseConnection.getConnection(javaClass.toString(), oneConfClassObj.aliasDb)
         val queryStatement = connNextSequence.prepareStatement(sqlQuery)
         val queryResult = queryStatement.executeQuery()
 
         queryResult.next()
         val nextValue = queryResult.getString(1)
         queryResult.close()
-        //connNextSequence.close()
 
         return nextValue
     }
 
     // создание запроса для изменения полей референсов типа inchild
     private fun createQueryForFamilyObject(
-        //allLoadObject: DataDBMain
-        //jsonConfigFile: RootCfg
     ) {
         // цикл по классам в схеме
         for (oneConfigClassDescr in jsonConfigFile.objects) {
@@ -747,7 +718,6 @@ object LoadObject {
                     // если refFieldValueOld = null, то в файле ссылочное поле не заполнено
                     val refFieldValueOld =
                         dataObjectDestList.find { it.code == oneConfigClassDescr.code && it.id == oneLoadObjIdOld }!!.listChildRef.find { it.fieldName == oneRefObjInChildDescr.refField }?.fieldValue
-                    //oneLoadObject.row.fields.find { it.fieldName == oneRefObjInChildDescr.refField }!!.fieldValue
 
                     // новое значение id объекта из поля типа inchild. если refFieldValueNew = null, значит объект уже был в базе и значение ссылочного поля в бд правильное
                     val refFieldValueNew =
@@ -791,11 +761,8 @@ object LoadObject {
                             )
                         sqlQuery += "END $$; \n"
 
-                        /*sqlQuery =
-                            "update ${oneConfigClassDescr.tableName} set ${oneRefObjInChildDescr.refField}=$refFieldValueNew " +
-                                    " where ${oneConfigClassDescr.keyFieldIn}=$oneLoadObjIdNew"*/
-
-                        val conn = DatabaseConnection.getConnection(javaClass.toString(),oneConfigClassDescr.aliasDb)
+                        val conn = DatabaseConnection.getConnection(javaClass.toString(), oneConfigClassDescr.aliasDb)
+                        conn.autoCommit = false
                         val queryStatement = conn.prepareStatement(sqlQuery)
                         logger.trace(
                             CommonFunctions().createObjectIdForLogMsg(
@@ -806,24 +773,8 @@ object LoadObject {
                             ) + "Query to update reference field with <keyType=InChild> field ${oneRefObjInChildDescr.refField}: $sqlQuery"
                         )
                         queryStatement.executeUpdate()
-
-                        /*val connect = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-                        connect.autoCommit = false
-                        val queryStatement = connect.prepareStatement(sqlQuery)
-                        logger.trace(
-                            CommonFunctions().createObjectIdForLogMsg(
-                                oneConfClassObj.code,
-                                oneConfClassObj.keyFieldOut,
-                                oneLoadObject.row.fields,
-                                -1
-                            ) + "Query to load object: $sqlQuery"
-                        )
-                        queryStatement.executeUpdate()
-                        connect.commit()
-                        //connect.rollback()
-                        connect.close()*/
-
-
+                        conn.commit()
+                        queryStatement.close()
                     }
                 }
             }
@@ -839,7 +790,7 @@ object LoadObject {
         var idScaleInDB = ""
 
         // если закачиваемый тариф есть в БД приемнике, то беру ид шкалы у него
-        val connCompare = DatabaseConnection.getConnection(javaClass.toString(),oneConfClassObj.aliasDb)
+        val connCompare = DatabaseConnection.getConnection(javaClass.toString(), oneConfClassObj.aliasDb)
         //val connCompare = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
         val queryStatement =
             connCompare.prepareStatement("select ${scalable.getScaleIdFieldName(oneConfClassObj)} from ${oneConfClassObj.tableName} where ${oneConfClassObj.keyFieldIn}=$idObjectInDB")
@@ -871,6 +822,48 @@ object LoadObject {
         createReport.writeReportOfProgramExecution("load")
         logger.info("The object file has been uploaded with error")
         exitProcess(-1)
+    }
+
+    // Поиск в файле у загружаемого объекта референса типа keyType=InChild
+    private fun getInChildIdForInParentObject(
+        objFieldsList: List<Fields>,
+        oneConfigClass: ObjectCfg,
+        refFieldIdValue: String,
+        nestedLevel: Int
+    ): List<Fields> {
+        val listChildRef = mutableListOf<Fields>()
+        if (oneConfigClass.refObjects.find { it.keyType.lowercase() == "inchild" } != null && nestedLevel < 2) {
+            for (oneRefObjInChildDescr in oneConfigClass.refObjects.filter { it.keyType.lowercase() == "inchild" }) {
+                if (objFieldsList.find { it.fieldName == oneRefObjInChildDescr.refField }!!.fieldValue != null) {
+
+                    // Для объекта, у которого есть референс с keyType=InChild,
+                    //   запоминаю идентификатор этого референса из файла в списке listChildRef
+                    // Например, для объекта classifierType будет запомнен идентификатор его референса classifierValue в следующем виде:
+                    //   DataObjectDest(code=classifierType, id=100009, idDest=100582, listChildRef=[Fields(fieldName=default_value_id, fieldValue=100018)])
+                    listChildRef.add(
+                        Fields(
+                            oneRefObjInChildDescr.refField,
+                            objFieldsList.find { it.fieldName == oneRefObjInChildDescr.refField }!!.fieldValue!!
+                        )
+                    )
+
+                    // Ищу объект, у которого есть референс с keyType=InChild, среди главных объектов.
+                    // Заполняю поле главного объекта, в котором хранится ссылка на референс, значением null
+                    // Например, для classifierType поле default_value_id станет равно null
+                    for (item in checkObject.allCheckObject.element.filter { it.code.equals(oneConfigClass.code, true) }) {
+                        if (item.row.fields.find {
+                                it.fieldName.equals(oneConfigClass.keyFieldIn, true)
+                                        && it.fieldValue.equals(refFieldIdValue, true)
+                            } != null) {
+                            val indexOfRefField =
+                                item.row.fields.indexOfFirst { it.fieldName == oneRefObjInChildDescr.refField }
+                            item.row.fields[indexOfRefField].fieldValue = null
+                        }
+                    }
+                }
+            }
+        }
+        return listChildRef
     }
 
 }

@@ -78,7 +78,7 @@ public val dataSourceConnections = mutableMapOf<String, Connection>()
 class CommonConstants {
 
     // версия программы
-    val VERSION = "1.0.5.27.3"
+    val VERSION = "1.0.5.28"
 
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2
@@ -197,7 +197,6 @@ fun main(args: Array<String>) {
         if (REGIM == CommonConstants().REGIM_CHECK_OBJFILE) {
 
             // считывание файла объектов
-            //val readJsonFile = ReadJsonFile()
             val allDataObject = readJsonFile.readObject()
 
             // действие при загрузке для каждого объекта из файла: добавление/обновление/пропуск
@@ -228,24 +227,18 @@ fun main(args: Array<String>) {
         // режим загрузки файла объектов
         if (REGIM == CommonConstants().REGIM_LOAD_OBJFILE) {
             // считывание файла объектов
-            //val readJsonFile = ReadJsonFile()
             val allDataObject = readJsonFile.readObject()
 
             // действие при загрузке для каждого объекта из файла: добавление/обновление/пропуск
             val listOfActionWithObject = mutableListOf<ActionWithObject>()
 
-            // коннект к БД
-            //val conn = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
-
             val checkObject = CheckObject
             checkObject.allCheckObject = allDataObject
             checkObject.listOfActionWithObject = listOfActionWithObject
 
-            //val loadObject = LoadObject(allDataObject)
             val loadObject = LoadObject
             loadObject.allLoadObject = allDataObject
             loadObject.listOfActionWithObject = listOfActionWithObject
-            //loadObject.conn = conn
 
             logger.info("Start of object file verification")
             try {
@@ -280,8 +273,6 @@ fun main(args: Array<String>) {
 
             }
             logger.info("The object file has been successfully uploaded")
-
-            //conn.close()
         }
 
     } else {
@@ -291,9 +282,6 @@ fun main(args: Array<String>) {
 
 
 class DBUpdateService {
-
-//companion object {
-///JvmStatic
 
     private val logger = LoggerFactory.getLogger("DBUpdateService")
 
@@ -396,7 +384,5 @@ class DBUpdateService {
             logger.error("<For the <${CommonConstants().REGIM_LOAD_OBJFILE}> Regim must be specified the Object File>")
             exitProcess(-1)
         }
-
     }
-//}
 }

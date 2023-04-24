@@ -8,14 +8,16 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.system.exitProcess
 
+
 data class DataDBMain(
     val cfgList: List<CfgList>,
     val element: List<DataDB>
 )
 
-data class DataDB(
+open class DataDB(
     val code: String,
     val loadMode: String,
+    //val mainField: String?, // Заполняется для linkObject с keyType=InRefFieldsJson. Заполняется идентификатором объекта из mainField
     val row: Row
 )
 
@@ -140,7 +142,8 @@ class ReaderDB {
                     jsonConfigFile.objects.find { it.code == includeClass.code && it.keyFieldOut != "" }
                 if (oneConfigClass != null) {
                     checkKeyFieldOutForLinkObject(oneConfigClass)
-                    readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
+                    checkKeyTypeForLinkObject(oneConfigClass)
+                    readOneObject(null, oneConfigClass, "", 0, null)
                 }
             }
             // если задан массив exclude с пустым полем filterObjects, то объекты классов указанные в нем исключаются из выгрузки
@@ -148,14 +151,16 @@ class ReaderDB {
             for (oneConfigClass in jsonConfigFile.objects.filter { it.keyFieldOut != "" }) {
                 if (jsonConfigFilterFile.exclude.find { it.code == oneConfigClass.code && it.filterObjects == "" } == null) {
                     checkKeyFieldOutForLinkObject(oneConfigClass)
-                    readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
+                    checkKeyTypeForLinkObject(oneConfigClass)
+                    readOneObject(null, oneConfigClass, "", 0, null)
                 }
             }
             // если массив include и массив exclude пустые или файл фильтров не указан
         } else {
             for (oneConfigClass in jsonConfigFile.objects.filter { it.keyFieldOut != "" }) {
                 checkKeyFieldOutForLinkObject(oneConfigClass)
-                readOneObject(null, oneConfigClass, jsonConfigFile, "", 0)
+                checkKeyTypeForLinkObject(oneConfigClass)
+                readOneObject(null, oneConfigClass, "", 0, null)
             }
         }
 
@@ -193,7 +198,7 @@ class ReaderDB {
         for (oneTaskObject in jsonTaskFile.element) {
             val oneConfigClass =
                 jsonConfigFile.objects[jsonConfigFile.objects.indexOfFirst { it.code == oneTaskObject.code }]
-            readOneObject(oneTaskObject, oneConfigClass, jsonConfigFile, "", 0)
+            readOneObject(oneTaskObject, oneConfigClass, "", 0, null)
         }
 
         tblMainMain = DataDBMain(jsonConfigFile.cfgList, tblMain)
@@ -217,9 +222,9 @@ class ReaderDB {
     private fun readOneObject(
         oneTaskObject: TaskFileFields?,
         oneConfigClass: ObjectCfg,
-        jsonConfigFile: RootCfg,
         scaleQuery: String, // Заполняется в случаи выгрузки шкал, в остальных случаях пусто. Может быть заполнено только в режиме save
-        linkObjectLevel: Int = 0 // Признак выгрузки массива linkObjects. Может принимать true только в режиме save, при выгрузке объектов linkObjects.
+        linkObjectLevel: Int = 0, // Признак выгрузки массива linkObjects. Может принимать true только в режиме save, при выгрузке объектов linkObjects.
+        oneCfgLinkObj: LinkObjects? // Если linkObjectLevel>0, то это описание linkObject из конфигурации
     ) {
 
         // чтение таблицы
@@ -229,8 +234,8 @@ class ReaderDB {
             createMainSqlQuery(
                 oneConfigClass,
                 oneTaskObject,
-                jsonConfigFile,
-                linkObjectLevel
+                linkObjectLevel,
+                oneCfgLinkObj
             )
         }
         logger.trace(
@@ -253,6 +258,7 @@ class ReaderDB {
             exitProcess(-1)
         }
 
+        var keyFieldInValue: String? = ""
         // запись данных БД в массив объектов для json
         while (queryResult.next()) {
             val tblFields = mutableListOf<Fields>()
@@ -269,6 +275,10 @@ class ReaderDB {
                     fieldValue = exponentialToText(fieldValue)
                 }
                 tblFields.add(Fields(fieldName, fieldValue))
+
+                if (oneConfigClass.keyFieldIn.contains(fieldName, true)) {
+                    keyFieldInValue = fieldValue
+                }
             }
 
             // рекурсивный поиск и запись ссылочных объектов в список tblRefObject
@@ -288,12 +298,30 @@ class ReaderDB {
                 }
 
                 if (linkObjectLevel > 0) {
+
+//                    var mainFieldForLinkObject: String? = null
+//                    // Для linkObject описанного с использованием keyType=InRefFieldsJson ищу идентификатор(mainFieldForLinkObject) референса типа refFieldJson,
+//                    //  через который этот linkObject связан с главным объектом.
+//                    if (linkObjectLevel == 1 && oneCfgLinkObj != null && oneCfgLinkObj.keyType.equals(
+//                            "InRefFieldsJson",
+//                            true
+//                        )
+//                    ) {
+//                        val listOfRefJsonId = getRefObjectIdFromRefFiledJson(
+//                            oneTaskObject!!.code,
+//                            oneCfgLinkObj,
+//                            tblMain[tblMain.lastIndex].row.fields, // Главный объект, в одном из полей которого находится строка json
+//                            keyFieldInValue
+//                        )
+//                        mainFieldForLinkObject = listOfRefJsonId?.joinToString(",")
+//                    }
+
                     val dataDBObject = DataDB(
                         oneConfigClass.code,
                         oneTaskObject!!.loadMode,
+                        //mainFieldForLinkObject,
                         Row(tblFields, tblRefObject, listOf<DataDB>(), listOf<DataDB>())
                     )
-
                     if (tblLinkObject.isEmpty()) {
                         tblLinkObject.add(dataDBObject)
                     } else {
@@ -301,7 +329,7 @@ class ReaderDB {
                     }
                     tblRefObject = mutableListOf<RefObject>()
                 }
-                readLinkObjectInGroup(oneConfigClass, jsonConfigFile, tblFields, linkObjectLevel)
+                readLinkObjectInGroup(oneConfigClass, tblFields, linkObjectLevel)
                 if (linkObjectLevel == 1) {
                     tblMain[tblMain.lastIndex].row.linkObjects += tblLinkObject
                     tblLinkObject = mutableListOf<DataDB>()
@@ -532,8 +560,8 @@ class ReaderDB {
     private fun createMainSqlQuery(
         oneConfigClass: ObjectCfg,
         oneTaskObject: TaskFileFields?,
-        jsonConfigFile: RootCfg,
-        linkObjectLevel: Int
+        linkObjectLevel: Int,
+        oneCfgLinkObj: LinkObjects?
     ): String {
 
         val tableName = oneConfigClass.tableName
@@ -557,16 +585,33 @@ class ReaderDB {
         var dopCondForLinkObjId = ""
 
         if (REGIM == CommonConstants().REGIM_CREATE_OBJFILE) {
-
             if (linkObjectLevel > 0) {
-                val mainObjClass = jsonConfigFile.objects.find { it.code == oneTaskObject!!.code }!!
-                val mainObjId =
-                    oneTaskObject!!.keyFieldIn.find { it.fieldName == mainObjClass.keyFieldIn }!!.fieldValue
+                // Если linkObjectLevel > 0, то oneCfgLinkObj не может быть null
+                if (!oneCfgLinkObj!!.keyType.equals("InRefFieldsJson", true)) {
+                    val mainObjClass = jsonConfigFile.objects.find { it.code == oneTaskObject!!.code }!!
+                    val mainObjId =
+                        oneTaskObject!!.keyFieldIn.find { it.fieldName == mainObjClass.keyFieldIn }!!.fieldValue
 
-                for (item in mainObjClass.linkObjects.filter { it.codeRef == oneConfigClass.code }) {
-                    val linkFieldForMainTable = item.refField
-                    dopCondForLinkObjId = " and $linkFieldForMainTable=$mainObjId "
-                    break
+                    for (item in mainObjClass.linkObjects.filter { it.codeRef == oneConfigClass.code }) {
+                        val linkFieldForMainTable = item.refField
+                        dopCondForLinkObjId = " and $linkFieldForMainTable=$mainObjId "
+                        break
+                    }
+                } else if (linkObjectLevel == 1 && oneCfgLinkObj.keyType.equals("InRefFieldsJson", true)) {
+                    // Заходим сюда только для linkObject первого уровня c keyType=InRefFieldsJson
+                    val listOfLinkObject = getLinkObjectIdFromRefFiledJson(
+                        oneTaskObject!!.code,
+                        oneCfgLinkObj,
+                        tblMain[tblMain.lastIndex].row.fields, // Главный объект, в одном из полей которого находится строка json
+                        jsonConfigFile
+                    )
+                    if (listOfLinkObject.isNullOrEmpty()) {
+                        // Если в строке json пустая или там нет нужных идентификаторов, то значит linkObject не нужно выгружать
+                        dopCondForLinkObjId = " and 1 = 2 "
+                    } else {
+                        dopCondForLinkObjId =
+                            " and ${oneConfigClass.keyFieldIn} in (" + listOfLinkObject.joinToString(",") + ")"
+                    }
                 }
             } else {
                 dopCondForMainObjId =
@@ -578,18 +623,18 @@ class ReaderDB {
         //     необходимо проверять по auditDateField вместе с родительским все подчиненные объекты.
         //     Родительский объект попадает в файл задания если был изменен хотя бы один из подчиненных.
         // 2. Объекты linkObject с keyType=InRefFieldsJson связаны с главным объектом через референс типа refFieldJson.
-        //    Например, lcScheme->balanceType->lcChargeOrder, где balanceType это референс, а lcChargeOrder это linjkObject
+        //    Например, lcScheme->balanceType->lcChargeOrder, где balanceType это референс, а lcChargeOrder это linkObject
         //    Такая зависимость описана в bo_lc_scheme.data следующим образом:
         //    {"balanceTypes":[{"balanceTypeId":100001,"bitChOrders":[100002]},{"balanceTypeId":100000,"bitChOrders":[100000,100001,100004,100005]}]}
-        //    Для выгрузки объектов lcScheme формирую простой запрос к одной талице bo_lc_scheme.
-        if (oneConfigClass.linkObjects.any { !it.keyType.equals("InRefFieldsJson", true) } && linkObjectLevel == 0) {
+        if (oneConfigClass.linkObjects.isNotEmpty() && linkObjectLevel == 0) {
             sqlQuery =
                 "\nselect * from  $tableName where audit_state = 'A' $filterObjCond and ${oneConfigClass.keyFieldIn} in (\n "
             sqlQuery += "select ${oneConfigClass.keyFieldIn} from $tableName where audit_state = 'A' $auditDateObjCond $filterObjCond $dopCondForMainObjId\n "
 
-            for (oneCfgLinkObj in oneConfigClass.linkObjects.filter { !it.keyType.equals("InRefFieldsJson", true) }) {
+            for (oneCfgLinkObjFilter in oneConfigClass.linkObjects
+                .filter { !it.keyType.equals("InRefFieldsJson", true) }) {
 
-                val oneCfgLinkObjClass = jsonConfigFile.objects.find { it.code == oneCfgLinkObj.codeRef }!!
+                val oneCfgLinkObjClass = jsonConfigFile.objects.find { it.code == oneCfgLinkObjFilter.codeRef }!!
 
                 var filterObjCondLink = ""
                 if (oneCfgLinkObjClass.filterObjects != "") {
@@ -616,8 +661,66 @@ class ReaderDB {
                         " and ${oneCfgLinkObjClass.auditDateField} > to_timestamp(' $AUDIT_DATE ','YYYY-MM-DD') "
                 }
 
-                sqlQuery += "union \n select ${oneCfgLinkObj.refField} from ${oneCfgLinkObjClass.tableName} where audit_state = 'A' " +
+                sqlQuery += "union \n select ${oneCfgLinkObjFilter.refField} from ${oneCfgLinkObjClass.tableName} where audit_state = 'A' " +
                         "$auditDateObjCondLink $filterObjCondLink $dopCondForLinkObjId\n "
+            }
+
+            // Для linkObject с keyType=InRefFieldsJson в режиме создания файла заданий
+            //  необходимо формировать запросы отдельно для каждого главного объекта
+            if (REGIM == CommonConstants().REGIM_CREATE_TASKFILE) {
+                for (oneCfgLinkObjFilter in oneConfigClass.linkObjects
+                    .filter { it.keyType.equals("InRefFieldsJson", true) }) {
+
+                    val jsonFieldName = oneCfgLinkObjFilter.refField.split(".")[0]
+
+                    val sqlQueryInRefFieldsJson =
+                        "select ${oneConfigClass.keyFieldIn},${jsonFieldName} " +
+                                "from  $tableName where audit_state = 'A' " +
+                                filterObjCond +
+                                "order by id"
+
+                    val oneCfgLinkObjClass = jsonConfigFile.objects.find { it.code == oneCfgLinkObjFilter.codeRef }!!
+                    var filterCond = ""
+                    if (oneCfgLinkObjClass.filterObjects != "") {
+                        filterCond = " and ${oneCfgLinkObjClass.filterObjects} "
+                    }
+                    val auditDateCond = " and ${oneCfgLinkObjClass.auditDateField} > to_timestamp(' $AUDIT_DATE ','YYYY-MM-DD') "
+
+                    val conn = DatabaseConnection.getConnection(javaClass.toString(), oneConfigClass.aliasDb)
+                    val queryStatement = conn.prepareStatement(sqlQueryInRefFieldsJson)
+                    val queryResult = queryStatement.executeQuery()
+                    while (queryResult.next()) {
+                        val fields = mutableListOf<Fields>()
+                        fields.addAll(
+                            listOf(
+                                // Идентификатор главного объекта
+                                Fields(queryResult.metaData.getColumnName(1), queryResult.getString(1)),
+                                // Поле с json строкой, в которой хранятся linkObject
+                                Fields(queryResult.metaData.getColumnName(2), queryResult.getString(2))
+                            )
+                        )
+
+                        val listOfLinkObject = getLinkObjectIdFromRefFiledJson(
+                            oneConfigClass.code,
+                            oneCfgLinkObjFilter,
+                            fields, // Главный объект (два поля keyFieldIn и поле с json строкой)
+                            jsonConfigFile
+                        )
+                        var likObjCond = ""
+                        if (listOfLinkObject != null){
+                            likObjCond = " and ${oneConfigClass.keyFieldIn} in "+ listOfLinkObject.joinToString(",","(",")")
+                        }
+
+                        sqlQuery += "union \n" +
+                                " select distinct ${fields[0].fieldValue} ${oneConfigClass.keyFieldIn} " +
+                                "from ${oneCfgLinkObjClass.tableName} " +
+                                "where audit_state = 'A' " +
+                                filterCond+
+                                auditDateCond+
+                                likObjCond+"\n"
+                    }
+                    queryStatement.close()
+                }
             }
             sqlQuery += ") " + "order by id"
         } else {
@@ -844,21 +947,21 @@ class ReaderDB {
                             for (itemFromAttribute in attributeRecord) {
 
                                 // ид референса/референсов в бд источнике
-                                val fieldValueInJsonArrayStr = mutableListOf<String>()
+                                val listOfFieldIdInJsonArray = mutableListOf<String>()
                                 if (itemFromAttribute is ObjectNode) { // для вариантов вида {\"restrictions\":[{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"},{\"finInstitutionId\":\"100002\",\"restrictionActionType\":\"BLOCK\"}]}
                                     if (itemFromAttribute.get(fieldNameInJsonStr) is ArrayNode) {
                                         for (item in itemFromAttribute.get(fieldNameInJsonStr)) { // {"calcItemsHistory":false,"balanceTypes":[{"balanceTypeId":100000,"bitChOrders":[100009,100010,100011,100012]},{"balanceTypeId":100001,"bitChOrders":[100003]}]}
-                                            fieldValueInJsonArrayStr.add(item.asText())
+                                            listOfFieldIdInJsonArray.add(item.asText())
                                         }
                                     } else {
-                                        fieldValueInJsonArrayStr.add(itemFromAttribute.get(fieldNameInJsonStr).asText())
+                                        listOfFieldIdInJsonArray.add(itemFromAttribute.get(fieldNameInJsonStr).asText())
                                     }
                                 } else if (attributeRecord is ObjectNode) { // для вариантов вида {\"restrictions\":{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"}}
-                                    fieldValueInJsonArrayStr.add(attributeRecord.get(fieldNameInJsonStr).asText())
+                                    listOfFieldIdInJsonArray.add(attributeRecord.get(fieldNameInJsonStr).asText())
                                 } else { // для вариантов вида {"systemGroupList":[100000,100002]}; {"systemGroupList":[100000]}
-                                    fieldValueInJsonArrayStr.add(itemFromAttribute.asText())
+                                    listOfFieldIdInJsonArray.add(itemFromAttribute.asText())
                                 }
-                                for (fieldValueInJsonStr in fieldValueInJsonArrayStr) {
+                                for (fieldValueInJsonStr in listOfFieldIdInJsonArray) {
                                     refObjects.add(
                                         RefObjects(
                                             oneRefFieldJson.record,
@@ -994,7 +1097,7 @@ class ReaderDB {
     }
 
     // Если в классе объекта в keyFieldOut указано поле, которое при этом является ссылкой типа refObjects,
-    // то считаю, что такой объект нельзя проверить
+// то считаю, что такой объект нельзя проверить
     fun checkFldOutForLink(
         oneConfigClass: ObjectCfg,
         tblFields: List<Fields>?,
@@ -1024,8 +1127,7 @@ class ReaderDB {
     // Выгрузка linkObject.keyType=InGroup. Выгружаются как подчиненные объекты
     private fun readLinkObjectInGroup(
         oneConfigClass: ObjectCfg,     // один класс из конфига
-        jsonConfigFile: RootCfg,       // все классы из конфига
-        tblFieldsOneObj: List<Fields>,  // список полей объекта класса jsonCfgOneObj в виде {название поля, значение поля}
+        tblFieldsOneObj: List<Fields>, // список полей объекта класса jsonCfgOneObj в виде {название поля, значение поля}
         linkObjectLevel: Int
     ) {
 
@@ -1046,7 +1148,13 @@ class ReaderDB {
                 val taskObject =
                     TaskFileFields(oneConfigClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
 
-                readOneObject(taskObject, oneCfgLinkObjClass, jsonConfigFile, "", linkObjectLevel + 1)
+                readOneObject(
+                    taskObject,
+                    oneCfgLinkObjClass,
+                    "",
+                    linkObjectLevel + 1,
+                    oneCfgLinkObj
+                )
             }
         }
 
@@ -1095,7 +1203,7 @@ class ReaderDB {
                     TaskFileFields(oneConfigClass.code, "Safe", lstKeyFieldInValue, lstKeyFieldOutValue)
                 if (objectEvent == "Read") {
                     taskFileFields = mutableListOf<TaskFileFields>()
-                    readOneObject(taskObject, scaleComponentClass, jsonConfigFile, sqlQuery, 0)
+                    readOneObject(taskObject, scaleComponentClass, sqlQuery, 0, null)
                 } else if (objectEvent == "Load") {
 
                     // Проверка scaleObjects
@@ -1132,7 +1240,7 @@ class ReaderDB {
 
                         if (objectEvent == "Read") {
                             taskFileFields = mutableListOf<TaskFileFields>()
-                            readOneObject(taskObject, scaleComponentValueClass, jsonConfigFile, sqlQuery, 0)
+                            readOneObject(taskObject, scaleComponentValueClass, sqlQuery, 0, null)
                         } else if (objectEvent == "Load") {
 
                             // проверка scaleObjects
@@ -1169,7 +1277,7 @@ class ReaderDB {
 
                                 if (objectEvent == "Read") {
                                     taskFileFields = mutableListOf<TaskFileFields>()
-                                    readOneObject(taskObject, scaleAmountClass, jsonConfigFile, sqlQuery, 0)
+                                    readOneObject(taskObject, scaleAmountClass, sqlQuery, 0, null)
                                 } else if (objectEvent == "Load") {
 
                                     // проверка scaleObjects
@@ -1380,8 +1488,8 @@ class ReaderDB {
     }
 
     // Проверка выгрузки linkObject.
-    // Если в классе есть ссылка на класс-linkObject, у которого заполнен keyFieldOut,
-    // то такой класс-linkObject не может быть выгружен как главный объект.
+// Если в классе есть ссылка на класс-linkObject, у которого заполнен keyFieldOut,
+// то такой класс-linkObject не может быть выгружен как главный объект.
     private fun checkKeyFieldOutForLinkObject(
         checkConfigClass: ObjectCfg
     ) {
@@ -1404,8 +1512,33 @@ class ReaderDB {
         }
     }
 
+    // Проверка выгрузки linkObject.
+// Второй уровень вложенности linkObject не может иметь keyType=InRefFieldsJson
+    private fun checkKeyTypeForLinkObject(
+        checkConfigClass: ObjectCfg
+    ) {
+
+        for (firstCfgLinkObj in checkConfigClass.linkObjects) {
+            val secondLinkClass = jsonConfigFile.objects.find { it.code.equals(firstCfgLinkObj.codeRef, true) }
+            for (secondCfgLinkObj in secondLinkClass!!.linkObjects) {
+                if (secondCfgLinkObj.keyType.equals("InRefFieldsJson", true)) {
+                    logger.error(
+                        CommonFunctions().createObjectIdForLogMsg(
+                            checkConfigClass.code,
+                            "",
+                            null,
+                            -1
+                        ) + "The objects of class <${checkConfigClass.code}> cannot be unloaded to the task file, because" +
+                                " there is a secondLevel linkObject <${secondCfgLinkObj.codeRef}> reference with keyType=InRefFieldsJson."
+                    )
+                    exitProcess(-1)
+                }
+            }
+        }
+    }
+
     // Преобразует экспоненциальную форму числа в десятичную с сохранением конечных нулей
-    // Например преобразует строку 0E-10 в строку 0.0000000000
+// Например преобразует строку 0E-10 в строку 0.0000000000
     private fun exponentialToText(fieldValue: String?): String? {
         var fieldValueLoc = fieldValue
         if (fieldValueLoc != null && fieldValueLoc.contains(Regex("[eE]"))) {
@@ -1417,4 +1550,173 @@ class ReaderDB {
 
         return fieldValueLoc
     }
+
+    // Возвращает список идентификаторов объектов linkObject(keyType=InRefFieldsJson) описанных в refFieldsJson.
+// Например, для fieldJson вида {"calcItemsHistory":false,"balanceTypes":[{"balanceTypeId":100001,"bitChOrders":[100002]},{"balanceTypeId":100000,"bitChOrders":[100000,100001,100004,100005]}]}
+//   вернет идентификаторы bitChOrders: 100002,100000,100001,100004,100005.
+    public fun getLinkObjectIdFromRefFiledJson(
+        mainClassCode: String,
+        oneCfgLinkObj: LinkObjects,
+        mainObjectFields: List<Fields>,
+        jsonConfigFile: RootCfg
+    ): List<String>? {
+
+        val listOfLinkObjects = mutableListOf<String>()
+
+        if (!oneCfgLinkObj.keyType.equals("InRefFieldsJson", true)) {
+            return null
+        }
+
+        // Например refField=data.balanceTypes.bitChOrders
+        val listOfRefFieldForLinkObject: List<String> = oneCfgLinkObj.refField.split(".")
+
+        // Например mainField=data.balanceTypes.balanceTypeId
+        val listOfMainFieldForLinkObject: List<String> = oneCfgLinkObj.mainField!!.split(".")
+
+        val jsonFieldName = listOfRefFieldForLinkObject[0]
+        val recordName = listOfRefFieldForLinkObject[1]
+        val linkObjectFieldNameInJsonStr = listOfRefFieldForLinkObject[2]
+
+        val jsonStr = mainObjectFields.first { it.fieldName == jsonFieldName }.fieldValue ?: return null
+
+        // В строке Json хранящейся в поле таблицы ищу запись refFieldsJson.record.
+        try {
+            // зачитываю json-строку атрибутов в дерево
+            val attribute = ReadJsonFile().readJsonStrAsTree(jsonStr)
+            var attributeRecord = attribute[recordName]
+            if (recordName == "") {
+                attributeRecord = attribute
+            }
+
+            if (attributeRecord != null && attributeRecord.size() > 0) {
+                // для каждого значения референса из строки атрибутов ищу референс среди референсов переданного объекта
+                for (itemFromAttribute in attributeRecord) {
+
+                    // ид референса/референсов в бд источнике
+                    val listOfFieldIdInJsonArray = mutableListOf<String>()
+                    if (itemFromAttribute is ObjectNode) { // для вариантов вида {\"restrictions\":[{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"},{\"finInstitutionId\":\"100002\",\"restrictionActionType\":\"BLOCK\"}]}
+                        if (itemFromAttribute.get(linkObjectFieldNameInJsonStr) is ArrayNode) {
+                            for (item in itemFromAttribute.get(linkObjectFieldNameInJsonStr)) { // {"calcItemsHistory":false,"balanceTypes":[{"balanceTypeId":100000,"bitChOrders":[100009,100010,100011,100012]},{"balanceTypeId":100001,"bitChOrders":[100003]}]}
+                                listOfFieldIdInJsonArray.add(item.asText())
+                            }
+                        } else {
+                            listOfFieldIdInJsonArray.add(itemFromAttribute.get(linkObjectFieldNameInJsonStr).asText())
+                        }
+                    } else if (attributeRecord is ObjectNode) { // для вариантов вида {\"restrictions\":{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"}}
+                        listOfFieldIdInJsonArray.add(attributeRecord.get(linkObjectFieldNameInJsonStr).asText())
+                    } else { // для вариантов вида {"systemGroupList":[100000,100002]}; {"systemGroupList":[100000]}
+                        listOfFieldIdInJsonArray.add(itemFromAttribute.asText())
+                    }
+                    for (fieldValueInJsonStr in listOfFieldIdInJsonArray) {
+                        listOfLinkObjects.add(fieldValueInJsonStr)
+                    }
+                    // это для случаев вида \"restrictions\":{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"}},
+                    // когда в itemFromAttribute попадают "finInstitutionId":"100001, затем "restrictionActionType":"BLOCK"
+                    if (attributeRecord !is ArrayNode) {
+                        break
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.error(
+                CommonFunctions().createObjectIdForLogMsg(
+                    mainClassCode,
+                    jsonConfigFile.objects.find { it.code.equals(mainClassCode, true) }!!.keyFieldIn,
+                    mainObjectFields,
+                    -1
+                ) + "<The problem with parsing the structure \"refFieldsJson\" in getLinkObjectIdFromRefFiledJson>: " + e.message
+            )
+            exitProcess(-1)
+        }
+
+        return listOfLinkObjects
+    }
+
+//    // Возвращает список идентификаторов объектов refFieldsJson, которые связаны с linkObject(keyType=InRefFieldsJson) и описаны в refFieldsJson.
+//    // Например, для fieldJson вида {"calcItemsHistory":false,"balanceTypes":[{"balanceTypeId":100001,"bitChOrders":[100002]},{"balanceTypeId":100000,"bitChOrders":[100000,100001,100004,100005]}]}
+//    //   и keyFieldInValue=100002(bitChOrders) вернет идентификатор balanceTypeId: 100001.
+//    // Если значение bitChOrders входит в несколько массивов, то вернет список balanceTypeId.
+//    private fun getRefObjectIdFromRefFiledJson(
+//        mainClassCode: String,
+//        oneCfgLinkObj: LinkObjects,
+//        mainObjectFields: List<Fields>,
+//        keyFieldInValue: String?
+//    ): List<String>? {
+//
+//        val listOfRefJsonObjects = mutableListOf<String>()
+//
+//        if (!oneCfgLinkObj.keyType.equals("InRefFieldsJson", true)) {
+//            return null
+//        }
+//
+//        // Например refField=data.balanceTypes.bitChOrders
+//        val listOfRefFieldForLinkObject: List<String> = oneCfgLinkObj.refField.split(".")
+//
+//        // Например mainField=data.balanceTypes.balanceTypeId
+//        val listOfMainFieldForLinkObject: List<String> = oneCfgLinkObj.mainField!!.split(".")
+//
+//        val jsonFieldName = listOfRefFieldForLinkObject[0]
+//        val recordName = listOfRefFieldForLinkObject[1]
+//        val linkObjectFieldNameInJsonStr = listOfRefFieldForLinkObject[2]
+//        val refJsonFieldNameInJsonStr = listOfMainFieldForLinkObject[2]
+//
+//        val jsonStr = mainObjectFields.first { it.fieldName == jsonFieldName }.fieldValue?: return null
+//
+//        // В строке Json хранящейся в поле таблицы ищу запись refFieldsJson.record.
+//        try {
+//            // зачитываю json-строку атрибутов в дерево
+//            val attribute = ReadJsonFile().readJsonStrAsTree(jsonStr)
+//            var attributeRecord = attribute[recordName]
+//            if (recordName == "") {
+//                attributeRecord = attribute
+//            }
+//
+//            if (attributeRecord != null && attributeRecord.size() > 0) {
+//                // для каждого значения референса из строки атрибутов ищу референс среди референсов переданного объекта
+//                for (itemFromAttribute in attributeRecord) {
+//
+//                    // ид референса/референсов в бд источнике
+//                    val listOfFieldIdInJsonArray = mutableListOf<String>()
+//                    if (itemFromAttribute is ObjectNode) { // для вариантов вида {\"restrictions\":[{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"},{\"finInstitutionId\":\"100002\",\"restrictionActionType\":\"BLOCK\"}]}
+//                        if (itemFromAttribute.get(linkObjectFieldNameInJsonStr) is ArrayNode) {
+//                            for (item in itemFromAttribute.get(linkObjectFieldNameInJsonStr)) { // {"calcItemsHistory":false,"balanceTypes":[{"balanceTypeId":100000,"bitChOrders":[100009,100010,100011,100012]},{"balanceTypeId":100001,"bitChOrders":[100003]}]}
+//                                listOfFieldIdInJsonArray.add(item.asText())
+//                            }
+//                        } else {
+//                            listOfFieldIdInJsonArray.add(itemFromAttribute.get(linkObjectFieldNameInJsonStr).asText())
+//                        }
+//                    } else if (attributeRecord is ObjectNode) { // для вариантов вида {\"restrictions\":{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"}}
+//                        listOfFieldIdInJsonArray.add(attributeRecord.get(linkObjectFieldNameInJsonStr).asText())
+//                    } else { // для вариантов вида {"systemGroupList":[100000,100002]}; {"systemGroupList":[100000]}
+//                        listOfFieldIdInJsonArray.add(itemFromAttribute.asText())
+//                    }
+//                    for (fieldValueInJsonStr in listOfFieldIdInJsonArray) {
+//                        if (keyFieldInValue.equals(fieldValueInJsonStr, true)) {
+//                            listOfRefJsonObjects.add(
+//                                itemFromAttribute.get(refJsonFieldNameInJsonStr).toString().replace("[", "")
+//                                    .replace("]", "")
+//                            )
+//                        }
+//                    }
+//                    // это для случаев вида \"restrictions\":{\"finInstitutionId\":\"100001\",\"restrictionActionType\":\"BLOCK\"}},
+//                    // когда в itemFromAttribute попадают "finInstitutionId":"100001, затем "restrictionActionType":"BLOCK"
+//                    if (attributeRecord !is ArrayNode) {
+//                        break
+//                    }
+//                }
+//            }
+//        } catch (e: Exception) {
+//            logger.error(
+//                CommonFunctions().createObjectIdForLogMsg(
+//                    mainClassCode,
+//                    jsonConfigFile.objects.find { it.code.equals(mainClassCode, true) }!!.keyFieldIn,
+//                    mainObjectFields,
+//                    -1
+//                ) + "<The problem with parsing the structure \"refFieldsJson\" in getRefObjectIdFromRefFiledJson>: " + e.message
+//            )
+//            exitProcess(-1)
+//        }
+//
+//        return listOfRefJsonObjects
+//    }
 }
