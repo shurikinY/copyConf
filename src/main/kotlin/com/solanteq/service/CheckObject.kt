@@ -22,7 +22,6 @@ object CheckObject {
 
     private val loadObject = LoadObject
 
-
     // Считывание конфигурации
     private val readJsonFile = ReadJsonFile()
     private val jsonConfigFile = readJsonFile.readConfig()
@@ -213,7 +212,7 @@ object CheckObject {
                 // Если закачиваемого тарифа нет в БД приемнике, то проверяю есть ли шкала в тарифе в файле данных и если есть,
                 //   то генерю новый ид шкалы и генерю запрос порождающий новую шкалу в БД приемнике
                 if (idScaleInDB == "") {
-                    idScaleInDB = getNewScaleId(oneCheckObject/*, oneConfClassMainObj, jsonConfigFile*/)
+                    idScaleInDB = getNewScaleId(oneCheckObject)
                 }
 
                 // Установка значения идентификатора шкалы в файле
@@ -377,12 +376,12 @@ object CheckObject {
                 val oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneCheckRefObj.code }!!
 
                 // Проверка референсного объекта
-                checkOneRefObject(oneCheckRefObj, allCheckObject, oneConfClassRefObj/*, jsonConfigFile*/)
+                checkOneRefObject(oneCheckRefObj, allCheckObject, oneConfClassRefObj)
 
                 // Проверка референсных объектов 2 уровня
                 for (oneCheckRefObj2Lvl in oneCheckRefObj.refObject) {
                     val oneConfClassRefObj2Lvl = jsonConfigFile.objects.find { it.code == oneCheckRefObj2Lvl.code }!!
-                    checkOneRefObject(oneCheckRefObj2Lvl, allCheckObject, oneConfClassRefObj2Lvl/*, jsonConfigFile*/)
+                    checkOneRefObject(oneCheckRefObj2Lvl, allCheckObject, oneConfClassRefObj2Lvl)
                 }
             }
 
@@ -2249,9 +2248,9 @@ object CheckObject {
     // Поиск идентификатора объекта из БД приемника по идентификаторы из БД источника.
     // Поиск осуществляется в списке соответствий идентификаторов из файла и из БД приемника.
     // Не должен возвращать null!
-    private fun getObjectDestId(oneCfgLinkObj: LinkObjects, objectIdFromFile: String): String {
+    private fun getObjectDestId(oneCfgLinkObj: LinkObjects, objectIdFromFile: String): String? {
         return loadObject.getDataObjectDestList()
-            .find { it.code == oneCfgLinkObj.codeRef && it.id == objectIdFromFile }!!.idDest
+            .find { it.code == oneCfgLinkObj.codeRef && it.id == objectIdFromFile }?.idDest
     }
 
 }
