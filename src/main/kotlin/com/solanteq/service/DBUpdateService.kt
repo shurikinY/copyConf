@@ -78,7 +78,7 @@ public val dataSourceConnections = mutableMapOf<String, Connection>()
 class CommonConstants {
 
     // версия программы
-    val VERSION = "1.0.5.28.2"
+    val VERSION = "1.0.5.29"
 
     // уровень вложенности рекурсии при чтении ссылочных объектов
     val NESTED_LEVEL_REFERENCE = 2
@@ -167,7 +167,7 @@ fun main(args: Array<String>) {
             DatabaseConnection.checkAliasDBForLinkObjects("Main")
 
             // проверка того, что объект и его референсы refTables находятся в одной БД
-            DatabaseConnection.checkAliasDBForRefTables("Main")
+            //DatabaseConnection.checkAliasDBForRefTables("Main")
 
             }
         // создание подключений к базам данных

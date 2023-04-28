@@ -214,31 +214,31 @@ class DatabaseConnection() {
             }
         }
 
-        // проверка того, что объект и его референсы refTables находятся в одной БД
-        fun checkAliasDBForRefTables(className: String) {
-
-            val readJsonFile = ReadJsonFile()
-            val jsonConfigFile = readJsonFile.readConfig()
-            val logger = LoggerFactory.getLogger(className)
-
-            for (oneObjectClass in jsonConfigFile.objects) {
-
-                if (oneObjectClass.refTables.isNotEmpty()) {
-                    for (oneRefTablesRef in oneObjectClass.refTables) {
-                        val oneRefTablesClass = jsonConfigFile.objects.find { it.code == oneRefTablesRef.codeRef }!!
-                        if (oneObjectClass.aliasDb != oneRefTablesClass.aliasDb) {
-                            logger.error(
-                                "The aliasDB <${oneObjectClass.aliasDb}> of a class <${oneObjectClass.code}> is different " +
-                                        "from the aliasDb <${oneRefTablesClass.aliasDb}> of its refTables class <${oneRefTablesClass.code}>."
-                            )
-                            exitProcess(-1)
-                        }
-                    }
-                }
-
-            }
-
-        }
+//        // проверка того, что объект и его референсы refTables находятся в одной БД
+//        fun checkAliasDBForRefTables(className: String) {
+//
+//            val readJsonFile = ReadJsonFile()
+//            val jsonConfigFile = readJsonFile.readConfig()
+//            val logger = LoggerFactory.getLogger(className)
+//
+//            for (oneObjectClass in jsonConfigFile.objects) {
+//
+//                if (oneObjectClass.refTables.isNotEmpty()) {
+//                    for (oneRefTablesRef in oneObjectClass.refTables) {
+//                        val oneRefTablesClass = jsonConfigFile.objects.find { it.code == oneRefTablesRef.codeRef }!!
+//                        if (oneObjectClass.aliasDb != oneRefTablesClass.aliasDb) {
+//                            logger.error(
+//                                "The aliasDB <${oneObjectClass.aliasDb}> of a class <${oneObjectClass.code}> is different " +
+//                                        "from the aliasDb <${oneRefTablesClass.aliasDb}> of its refTables class <${oneRefTablesClass.code}>."
+//                            )
+//                            exitProcess(-1)
+//                        }
+//                    }
+//                }
+//
+//            }
+//
+//        }
 
     }
 

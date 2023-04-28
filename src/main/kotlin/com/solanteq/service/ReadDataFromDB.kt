@@ -684,7 +684,8 @@ class ReaderDB {
                     if (oneCfgLinkObjClass.filterObjects != "") {
                         filterCond = " and ${oneCfgLinkObjClass.filterObjects} "
                     }
-                    val auditDateCond = " and ${oneCfgLinkObjClass.auditDateField} > to_timestamp(' $AUDIT_DATE ','YYYY-MM-DD') "
+                    val auditDateCond =
+                        " and ${oneCfgLinkObjClass.auditDateField} > to_timestamp(' $AUDIT_DATE ','YYYY-MM-DD') "
 
                     val conn = DatabaseConnection.getConnection(javaClass.toString(), oneConfigClass.aliasDb)
                     val queryStatement = conn.prepareStatement(sqlQueryInRefFieldsJson)
@@ -707,17 +708,18 @@ class ReaderDB {
                             jsonConfigFile
                         )
                         var likObjCond = ""
-                        if (listOfLinkObject != null){
-                            likObjCond = " and ${oneConfigClass.keyFieldIn} in "+ listOfLinkObject.joinToString(",","(",")")
+                        if (listOfLinkObject != null) {
+                            likObjCond =
+                                " and ${oneConfigClass.keyFieldIn} in " + listOfLinkObject.joinToString(",", "(", ")")
                         }
 
                         sqlQuery += "union \n" +
                                 " select distinct ${fields[0].fieldValue} ${oneConfigClass.keyFieldIn} " +
                                 "from ${oneCfgLinkObjClass.tableName} " +
                                 "where audit_state = 'A' " +
-                                filterCond+
-                                auditDateCond+
-                                likObjCond+"\n"
+                                filterCond +
+                                auditDateCond +
+                                likObjCond + "\n"
                     }
                     queryStatement.close()
                 }
@@ -997,84 +999,105 @@ class ReaderDB {
             }
         }
 
-        // обработка списка референсов refTables
+        // Обработка списка референсов refTables.
+        // Считаю, что таблица связей(acc_tr_rule__txn_type) и таблица с главным объектом(acc_transfer_rule) находится в одной базе.
+        //   При этом таблица самих референсов(bo_txn_type) может быть в другой базе.
         for (oneLinkRefObj in jsonCfgOneObj.refTables) {
 
-            val indObj = jsonCfgAllObj.objects.indexOfFirst { it.code == oneLinkRefObj.codeRef }
-            if (indObj < 0) {
-                continue
+            // Конфигурация класса референсного объекта. Должна быть в файле конфигурации!
+            val refConfClass = jsonCfgAllObj.objects.find { it.code == oneLinkRefObj.codeRef }!!
+
+            // идентификатор главного объекта
+            val mainObjectId = tblFieldsOneObj.find { it.fieldName == jsonCfgOneObj.keyFieldIn }?.fieldValue
+
+            // Нужно найти название поля в таблице связи между главным объектом и его референсами типа refTables.
+            // Название поля есть в описании конфигурации главного объекта в секции refTables.refFieldTo.
+            //val linkFieldName = oneLinkRefObj.refFieldTo
+
+            // Название таблицы референсов.
+            //val linkTableName = refConfClass.tableName
+
+            var filterRefObjCond = ""
+            if (refConfClass.filterObjects != "") {
+                filterRefObjCond = " and ${refConfClass.filterObjects} "
             }
 
-            // Нужно найти название поля для соединения с таблицей класса искомого объекта(ов).
-            // Название поля есть в refTables связанного класса
-            // В новом варианте конфигурации появилось поле refFieldTo в refTables
-            val linkFieldName =
-                if (oneLinkRefObj.refFieldTo != "") {
-                    oneLinkRefObj.refFieldTo
-                } else {
-                    jsonCfgAllObj.objects[indObj].refTables.find { it.table == oneLinkRefObj.table }!!.refField
-                }
-            // название таблицы связанного класса
-            val linkTableName = jsonCfgAllObj.objects[indObj].tableName
-            // поле keyFieldIn связанного класса
-            val linkKeyFieldIn = jsonCfgAllObj.objects[indObj].keyFieldIn
-
-            var filterObjCond = ""
-            if (jsonCfgAllObj.objects[indObj].filterObjects != "") {
-                filterObjCond = " and ${jsonCfgAllObj.objects[indObj].filterObjects} "
-            }
-
-            val sqlFieldValue = "select distinct rel_tbl.$linkKeyFieldIn " +
-                    "from ${oneLinkRefObj.table} link_tbl " +
-                    "join $linkTableName rel_tbl on rel_tbl.$linkKeyFieldIn = link_tbl.$linkFieldName " +
-                    "where rel_tbl.audit_state = 'A' and link_tbl.${oneLinkRefObj.refField} = ${tblFieldsOneObj.find { it.fieldName == jsonCfgOneObj.keyFieldIn }?.fieldValue}" +
-                    filterObjCond
+            // Запрос к таблице связей, для того чтобы получить все референсы refTables главного объекта.
+            var sqlQuery = "select distinct ${oneLinkRefObj.refFieldTo} " +
+                    "from ${oneLinkRefObj.table} " +
+                    "where ${oneLinkRefObj.refField} = $mainObjectId " +
+                    "order by ${oneLinkRefObj.refFieldTo}"
             logger.trace(
                 CommonFunctions().createObjectIdForLogMsg(
                     jsonCfgOneObj.code,
                     jsonCfgOneObj.keyFieldIn,
                     tblFieldsOneObj,
                     -1
-                ) + "Query to find \"refTables\". " + sqlFieldValue
+                ) + "Query to relation table to find \"refTables\" references: " + sqlQuery
+            )
+
+            // Запрос строится к БД, в которой находится главный объект и таблица связей
+            //  между главным объектом и его референсом типа refTables.
+            var conn = DatabaseConnection.getConnection(javaClass.toString(), jsonCfgOneObj.aliasDb)
+            var queryStatement = conn.prepareStatement(sqlQuery)
+            var queryResult = queryStatement.executeQuery()
+
+            // Список идентификаторов референсных объектов
+            val listOfRefId = mutableListOf<String>()
+            while (queryResult.next()) {
+                listOfRefId.add(queryResult.getString(1))
+            }
+            queryStatement.close()
+
+            // Нет референсов типа refTables
+            if (listOfRefId.isEmpty()) {
+                continue
+            }
+
+            // Запрос к БД, в которой находится референсный объект типа refTables.
+            sqlQuery = "select distinct ${refConfClass.keyFieldIn} " +
+                    "from ${refConfClass.tableName} " +
+                    "where ${refConfClass.keyFieldIn} in ${listOfRefId.joinToString(",", "(", ")")} and " +
+                    "audit_state='A' " +
+                    filterRefObjCond +
+                    "order by ${refConfClass.keyFieldIn}"
+            logger.trace(
+                CommonFunctions().createObjectIdForLogMsg(
+                    jsonCfgOneObj.code,
+                    jsonCfgOneObj.keyFieldIn,
+                    tblFieldsOneObj,
+                    -1
+                ) + "Query to find \"refTables\" reference. " + sqlQuery
             )
 
             // Запрос строится к БД, в которой находится референсный объект типа refTables.
-            // Например, для главного объекта mccGroup запрос к его refTables класса mcc будет построен к БД, указанной в классе mcc.
-            // При запуске приложения есть проверка того, что объект и его референсы refTables находятся в одной БД, т.е. объекты mccGroup и mcc в одной БД.
-            val conn = DatabaseConnection.getConnection(javaClass.toString(), jsonCfgAllObj.objects[indObj].aliasDb)
-            val queryFieldValue = conn.prepareStatement(sqlFieldValue)
-            val queryResult = queryFieldValue.executeQuery()
+            conn = DatabaseConnection.getConnection(javaClass.toString(), refConfClass.aliasDb)
+            queryStatement = conn.prepareStatement(sqlQuery)
+            queryResult = queryStatement.executeQuery()
             if (!queryResult.isBeforeFirst) {
-                continue
+                showErrorRefTablesMsg(jsonCfgOneObj, tblFieldsOneObj, oneLinkRefObj.table,  refConfClass.aliasDb)
+                exitProcess(-1)
             }
+            var countRefTablesReference = 0
             while (queryResult.next()) {
-
-                val fieldValue = queryResult.getString(1)
-                if (fieldValue == null) {
-                    logger.error(
-                        CommonFunctions().createObjectIdForLogMsg(
-                            jsonCfgOneObj.code,
-                            jsonCfgOneObj.keyFieldIn,
-                            tblFieldsOneObj,
-                            -1
-                        ) + "<The value ${linkTableName}.${linkKeyFieldIn} is null OR There is no relation in table ${oneLinkRefObj.table}>"
-                    )
-                    exitProcess(-1)
-                }
-
                 refObjects.add(
                     RefObjects(
                         "",
                         oneLinkRefObj.refField,
-                        queryResult.getString(1).toString(),
+                        queryResult.getString(1),
                         oneLinkRefObj.codeRef,
                         "",
                         oneLinkRefObj.keyType,
                         "refTables"
                     )
                 )
+                countRefTablesReference++
             }
-            queryFieldValue.close()
+            if (countRefTablesReference != listOfRefId.size){
+                showErrorRefTablesMsg(jsonCfgOneObj, tblFieldsOneObj, oneLinkRefObj.table,  refConfClass.aliasDb)
+                exitProcess(-1)
+            }
+            queryStatement.close()
         }
 
         return refObjects
@@ -1630,6 +1653,22 @@ class ReaderDB {
         }
 
         return listOfLinkObjects
+    }
+
+    private fun showErrorRefTablesMsg(
+        jsonCfgOneObj: ObjectCfg,
+        tblFieldsOneObj: List<Fields>,
+        tableName: String,
+        aliasDB :String?
+    ) {
+        logger.error(
+            CommonFunctions().createObjectIdForLogMsg(
+                jsonCfgOneObj.code,
+                jsonCfgOneObj.keyFieldIn,
+                tblFieldsOneObj,
+                -1
+            ) + "<Not all refTables type references were found in table $tableName. AliasDB=$aliasDB>."
+        )
     }
 
 //    // Возвращает список идентификаторов объектов refFieldsJson, которые связаны с linkObject(keyType=InRefFieldsJson) и описаны в refFieldsJson.

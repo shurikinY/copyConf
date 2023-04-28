@@ -138,6 +138,7 @@ object CheckObject {
         // Проверка цикличности ссылок.
         // Цикл по главным объектам (главные объекты это объекты, которые нужно загрузить в БД).
         for (oneCheckObject in allCheckObject.element) {
+
             // поиск описания класса референсного объекта в файле конфигурации
             val oneConfCheckObj = jsonConfigFile.objects.find { it.code == oneCheckObject.code }!!
             val chainCheckObject = mutableListOf<DataDB>(oneCheckObject)
@@ -283,9 +284,7 @@ object CheckObject {
                                 "RefTables links of main object don't match with object from DB."
                     )
                     actionUpdateRefTables = true
-
                 }
-
             } else {
                 actionInsert = true
             }
@@ -345,11 +344,9 @@ object CheckObject {
                 else
                     "The object will be skipped during loading."
             )
-
             createReport.createSummaryReport(oneConfClassMainObj.code, actionWithObject)
 
         }
-
         createReport.writeReportOfProgramExecution("check")
 
     }
@@ -643,7 +640,7 @@ object CheckObject {
         }
 
         if (regimeFieldsToSelect.equals("SELECT_ID_FIELD", true)) {
-            sqlQuery = "select ${oneConfigClass.keyFieldIn}, count(id) over() " +
+            sqlQuery = "select ${oneConfigClass.keyFieldIn}, count(${oneConfigClass.keyFieldIn}) over() " +
                     "from $tableName " +
                     "where $conditionSql and audit_state = 'A'"
         } else {
@@ -914,75 +911,95 @@ object CheckObject {
         // возвращаемое процедурой значение
         var returnValue = true
 
-        for (oneRefTableDescription in oneObjectClass.refTables) {
+        for (oneLinkRefObj in oneObjectClass.refTables) {
 
             // класс ссылки refTables
-            val oneRefTablesClass = jsonConfigFile.objects.find { it.code == oneRefTableDescription.codeRef }
-
-            if (oneRefTablesClass == null) {
-                logger.error(
-                    CommonFunctions().createObjectIdForLogMsg(oneRefTableDescription.codeRef, "", null, 0) +
-                            "The class was not found in the configuration file."
-                )
-                exitProcess(-1)
-            }
+            val refConfClass = jsonConfigFile.objects.find { it.code == oneLinkRefObj.codeRef }!!
 
             // строка кодов объектов refTables из бд приемника
             val listRefTablesCodeInDB = mutableListOf<String>()
-            // кол-во ссылок refTables в бд приемнике
-            var countRefTablesObjInDB = 0
 
             // строка кодов объектов refTables из файла
             val listRefTablesCodeInFile = mutableListOf<String>()
+
+            // кол-во ссылок refTables в бд приемнике
+            var countRefTablesReference = 0
+
             // кол-во ссылок refTables в файле
             val countRefTablesObjInFile: Int =
-                listRefObject.filter { it.code == oneRefTablesClass.code && it.typeRef == "refTables" }.size
+                listRefObject.filter { it.code == refConfClass.code && it.typeRef == "refTables" }.size
 
-            for (item in listRefObject.filter { it.code == oneRefTablesClass.code && it.typeRef == "refTables" }) {
+            for (item in listRefObject.filter { it.code == refConfClass.code && it.typeRef == "refTables" }) {
                 listRefTablesCodeInFile +=
-                    item.row.fields.find { it.fieldName == oneRefTablesClass.keyFieldOut }!!.fieldValue!!
+                    item.row.fields.find { it.fieldName == refConfClass.keyFieldOut }!!.fieldValue!!
             }
 
-            var filterObjCond = ""
-            if (oneRefTablesClass.filterObjects != "") {
-                filterObjCond += " and ${oneRefTablesClass.filterObjects} "
+            var filterRefObjCond = ""
+            if (refConfClass.filterObjects != "") {
+                filterRefObjCond += " and ${refConfClass.filterObjects} "
             }
 
-            // Запрос строится к БД, в которой находится референсный объект типа refTables.
-            // Например, для главного объекта mccGroup запрос к его refTables класса mcc будет построен к БД, указанной в классе mcc.
-            // При запуске приложения есть проверка того, что объект и его референсы refTables находятся в одной БД, т.е. объекты mccGroup и mcc в одной БД.
-            val sqlQuery = "select distinct ref_tbl.${oneRefTablesClass.keyFieldOut}, count(1) over() " +
-                    "from ${oneRefTableDescription.table} link_tbl " +
-                    "join ${oneObjectClass.tableName} rel_tbl on rel_tbl.${oneObjectClass.keyFieldIn} = link_tbl.${oneRefTableDescription.refField} " +
-                    "join ${oneRefTablesClass.tableName} ref_tbl on ref_tbl.${oneRefTablesClass.keyFieldIn} = link_tbl.${oneRefTableDescription.refFieldTo} " +
-                    "where ref_tbl.audit_state = 'A' and rel_tbl.${oneObjectClass.keyFieldIn} = $idObjectInDB $filterObjCond"
+            // Запрос к таблице связей, для того чтобы получить все референсы refTables главного объекта.
+            var sqlQuery = "select distinct ${oneLinkRefObj.refFieldTo} " +
+                    "from ${oneLinkRefObj.table} " +
+                    "where ${oneLinkRefObj.refField} = $idObjectInDB " +
+                    "order by ${oneLinkRefObj.refFieldTo}"
             logger.trace(
                 CommonFunctions().createObjectIdForLogMsg(
                     oneObjectClass.code,
                     oneObjectClass.keyFieldIn,
                     idObjectInDB
-                ) + "The query to match RefTables links for class <${oneRefTablesClass.code}>. $sqlQuery"
+                ) + "The query(part 1) to match RefTables references for class <${refConfClass.code}>: $sqlQuery"
             )
-            val connCmpObjectRefTables = DatabaseConnection.getConnection(javaClass.toString(), oneObjectClass.aliasDb)
-            val queryStatement = connCmpObjectRefTables.prepareStatement(sqlQuery)
-            val queryResult = queryStatement.executeQuery()
+
+            // Запрос строится к БД, в которой находится главный объект и таблица связей
+            //  между главным объектом и его референсом типа refTables.
+            var conn = DatabaseConnection.getConnection(javaClass.toString(), oneObjectClass.aliasDb)
+            var queryStatement = conn.prepareStatement(sqlQuery)
+            var queryResult = queryStatement.executeQuery()
+
+            // Список идентификаторов референсных объектов из БД приемника
+            val listOfRefId = mutableListOf<String>()
             while (queryResult.next()) {
-
-                // кол-во ссылок refTables в бд приемнике
-                countRefTablesObjInDB = queryResult.getInt(2)
-                // строка кодов объектов refTables из бд приемника
-                listRefTablesCodeInDB += queryResult.getString(1)
-
+                listOfRefId.add(queryResult.getString(1))
             }
-            queryResult.close()
+            queryStatement.close()
 
-            if (countRefTablesObjInDB != countRefTablesObjInFile || listRefTablesCodeInDB.sorted() != listRefTablesCodeInFile.sorted()) {
+            if (listOfRefId.size > 0) {
+                // Запрос к БД, в которой находится референсный объект типа refTables.
+                sqlQuery = "select distinct ${refConfClass.keyFieldOut}, ${refConfClass.keyFieldIn} " +
+                        "from ${refConfClass.tableName} " +
+                        "where ${refConfClass.keyFieldIn} in ${listOfRefId.joinToString(",", "(", ")")} and " +
+                        "audit_state='A' " +
+                        filterRefObjCond +
+                        "order by ${refConfClass.keyFieldIn}"
+                logger.trace(
+                    CommonFunctions().createObjectIdForLogMsg(
+                        oneObjectClass.code,
+                        oneObjectClass.keyFieldIn,
+                        idObjectInDB
+                    ) + "The query(part 2) to match RefTables references for class <${refConfClass.code}>: " + sqlQuery
+                )
+                conn = DatabaseConnection.getConnection(javaClass.toString(), refConfClass.aliasDb)
+                queryStatement = conn.prepareStatement(sqlQuery)
+                queryResult = queryStatement.executeQuery()
+
+                while (queryResult.next()) {
+                    // строка кодов объектов refTables из бд приемника
+                    listRefTablesCodeInDB += queryResult.getString(1)
+                    // кол-во ссылок refTables в бд приемнике
+                    countRefTablesReference++
+                }
+                queryStatement.close()
+            }
+
+            if (countRefTablesReference != countRefTablesObjInFile || listRefTablesCodeInDB.sorted() != listRefTablesCodeInFile.sorted()) {
                 logger.debug(
                     CommonFunctions().createObjectIdForLogMsg(
                         oneObjectClass.code,
                         oneObjectClass.keyFieldIn,
                         idObjectInDB
-                    ) + "RefTables links did not match for class <${oneRefTablesClass.code}>. "
+                    ) + "RefTables links did not match for class <${refConfClass.code}>. "
                 )
                 returnValue = false
                 break
@@ -992,7 +1009,7 @@ object CheckObject {
                         oneObjectClass.code,
                         oneObjectClass.keyFieldIn,
                         idObjectInDB
-                    ) + "RefTables links match for class <${oneRefTablesClass.code}>. "
+                    ) + "RefTables links match for class <${refConfClass.code}>. "
                 )
             }
         }
@@ -1046,13 +1063,13 @@ object CheckObject {
         }
     }
 
-    // формирование условий запроса для референсов linkObjects
+    // Формирование условий запроса для референсов linkObjects
     private fun createLinkObjectsQuery(
         oneLoadObject: DataDB,
         oneConfClassObj: ObjectCfg,
         idObjectInDB: String,
-        levelLinkObject: Int, // уровень вложенности linkObject
-        parentLinkObjectKeyType: String, // тип связи (keyType) к linkObject от linkObject верхнего уровня
+        levelLinkObject: Int, // Уровень вложенности linkObject
+        parentLinkObjectKeyType: String, // Тип связи (keyType) к linkObject от linkObject верхнего уровня
         sqlQueryConditionArray: Array<String>
     ) {
 
@@ -1154,17 +1171,17 @@ object CheckObject {
                 val conn = DatabaseConnection.getConnection(javaClass.toString(), oneLinkObjClass.aliasDb)
                 val queryStatement = conn.prepareStatement(sqlQuery)
                 val queryResult = queryStatement.executeQuery()
-                // цикл по всем записям linkObjects из бд приемника
+                // Цикл по всем записям linkObjects из бд приемника
                 while (queryResult.next()) {
-                    // формирую список полей и значений для одной записи, которую нужно проверить
+                    // Формирую список полей и значений для одной записи, которую нужно проверить
                     val linkObjectFieldsFromDB = mutableListOf<Fields>()
                     var linkObjectFromDBId = "-1"
                     var isLinkObjectFindInFile = false
                     var isLinkObjectValidDateBeforeNow = false
                     for (i in 1..queryResult.metaData.columnCount) {
-                        // название поля таблицы
+                        // Название поля таблицы
                         val fieldName = queryResult.metaData.getColumnName(i)
-                        // значение поля таблицы
+                        // Значение поля таблицы
                         val fieldValue = queryResult.getString(i)
 
                         if (oneLinkObjClass.fieldsNotExport.find { it.name == fieldName } == null) {
@@ -1186,17 +1203,17 @@ object CheckObject {
                         }
                     }
 
-                    // сравниваю объект из бд приемника со всеми объектами linkObjects того же класса из загружаемого главного объекта oneLoadObject
+                    // Сравниваю объект из бд приемника со всеми объектами linkObjects того же класса из загружаемого главного объекта oneLoadObject
                     for (oneLinkObject in oneLoadObject.row.linkObjects.filter { it.code == oneLinkObjClass.code }) {
 
-                        // ид linkObject из файла
+                        // Ид linkObject из файла
                         val linkObjectFromFileId =
                             oneLinkObject.row.fields.find { it.fieldName == oneLinkObjClass.keyFieldIn }!!.fieldValue!!
 
-                        // значение всех полей объекта из БД и файла совпадает
+                        // Значение всех полей объекта из БД и файла совпадает
                         var isLinkObjectFieldsEqual = true
 
-                        // сравниваю значение полей
+                        // Сравниваю значение полей
                         for ((fieldName, fieldValue) in linkObjectFieldsFromDB) {
                             if (fieldName != oneLinkObjClass.keyFieldIn && oneLinkObject.row.fields.find { it.fieldName == fieldName }!!.fieldValue != fieldValue &&
                                 oneLinkObjClass.scale?.find { it.refField == fieldName } == null
@@ -1216,7 +1233,7 @@ object CheckObject {
                             }
                         }
 
-                        // сравниваю референсы refTables
+                        // Сравниваю референсы refTables
                         if (isLinkObjectFieldsEqual) {
 
                             logger.debug(
@@ -1351,13 +1368,13 @@ object CheckObject {
 
                         }
 
-                        // название переменной для значения сиквенса
+                        // Название переменной для значения сиквенса
                         val nextValueRevLinkName = "nextValueRevLink$cntForLinkObInQuery"
-                        // увеличение счетчика переменных
+                        // Увеличение счетчика переменных
                         cntForLinkObInQuery++
-                        // объявление переменных для значений сиквенса в psql
+                        // Объявление переменных для значений сиквенса в psql
                         sqlQueryLinkObjDeclare += "declare $nextValueRevLinkName integer; \n"
-                        // инициализация переменных для сиквенса в psql
+                        // Инициализация переменных для сиквенса в psql
                         sqlQueryLinkObjInit += "$nextValueRevLinkName=nextval('${CommonConstants().commonSequence}'); \n"
                         // insert в таблицу аудита новой записи объекта linkObject
                         sqlQueryLinkObject +=
@@ -1472,13 +1489,13 @@ object CheckObject {
                             eventWithLinkObject
                         )
 
-                // название переменной для значения сиквенса
+                // Название переменной для значения сиквенса
                 val nextValueRevLinkName = "nextValueRevLink$cntForLinkObInQuery"
-                // увеличение счетчика переменных
+                // Увеличение счетчика переменных
                 cntForLinkObInQuery++
-                // объявление переменных для значений сиквенса в psql
+                // Объявление переменных для значений сиквенса в psql
                 sqlQueryLinkObjDeclare += "declare $nextValueRevLinkName integer; \n"
-                // инициализация переменных для сиквенса в psql
+                // Инициализация переменных для сиквенса в psql
                 sqlQueryLinkObjInit += "$nextValueRevLinkName=nextval('${CommonConstants().commonSequence}'); \n"
 
                 // insert в таблицу аудита новой записи объекта linkObject
@@ -1496,7 +1513,6 @@ object CheckObject {
                         loadObject.createRefTablesQuery(
                             oneLinkObject,
                             oneLinkObjClass,
-                            null,
                             jsonConfigFile,
                             idLinkObjectInDB,
                             "refTables"
@@ -1533,7 +1549,7 @@ object CheckObject {
         oneLinkObject: DataDB,
     ): Array<String> {
 
-        // нужно добавлять в БД приемник новые объекты шкалы
+        // Нужно добавлять в БД приемник новые объекты шкалы
 
         var sqlQueryScale = ""
         var sqlQueryScaleObjDeclare = ""
@@ -1550,7 +1566,7 @@ object CheckObject {
                 jsonConfigFile.objects.find { it.code == scaleComponentObject.code }?.let { scaleComponentClass ->
                     idScaleComponentObjectInDB = loadObject.nextSequenceValue(scaleComponentClass)
 
-                    // перед формированием запроса для объекта linkObject подставляю новое значение поля scale_component_id
+                    // Перед формированием запроса для объекта linkObject подставляю новое значение поля scale_component_id
                     indexOfField =
                         oneLinkObject.row.fields.indexOfFirst { it.fieldName.lowercase() == scalable.scaleComponentFieldName }
                     oneLinkObject.row.fields[indexOfField].fieldValue = idScaleComponentObjectInDB
@@ -1565,13 +1581,13 @@ object CheckObject {
                                 "insert"
                             )
 
-                    // название переменной для значения сиквенса
+                    // Название переменной для значения сиквенса
                     nextValueRevScaleName = "nextValueRevScale$cntForLinkObInQuery"
                     cntForLinkObInQuery++
 
-                    // объявление переменных для значений сиквенса в psql
+                    // Объявление переменных для значений сиквенса в psql
                     sqlQueryScaleObjDeclare += "declare $nextValueRevScaleName integer; \n"
-                    // инициализация переменных для сиквенса в psql
+                    // Инициализация переменных для сиквенса в psql
                     sqlQueryScaleObjInit += "$nextValueRevScaleName=nextval('${CommonConstants().commonSequence}'); \n"
 
                     // insert в таблицу аудита новой записи
@@ -1594,7 +1610,7 @@ object CheckObject {
                                     scalableAmountObject.row.fields.find { it.fieldName == scalableAmountClass.keyFieldIn }!!.fieldValue!!
 
                                 idScalableAmountObjectInDB = ""
-                                // проверка есть ли объект scalableAmount в БД приемнике по полному соответствию (включая поле scale_id)
+                                // Проверка есть ли объект scalableAmount в БД приемнике по полному соответствию (включая поле scale_id)
                                 val sqlQuery =
                                     loadObject.createMainInsUpdQuery(
                                         scalableAmountObject,
@@ -1626,7 +1642,7 @@ object CheckObject {
                                     }
                                 }
 
-                                // если объекта нет, то insert в таблицу объекта scalableAmount если не найдено полного соответствия
+                                // Если объекта нет, то insert в таблицу объекта scalableAmount если не найдено полного соответствия
                                 if (idScalableAmountObjectInDB == "") {
                                     idScalableAmountObjectInDB =
                                         loadObject.nextSequenceValue(scalableAmountClass)
@@ -1642,9 +1658,9 @@ object CheckObject {
                                     nextValueRevScaleName = "nextValueRevScale$cntForLinkObInQuery"
                                     cntForLinkObInQuery++
 
-                                    // объявление переменных для значений сиквенса в psql
+                                    // Объявление переменных для значений сиквенса в psql
                                     sqlQueryScaleObjDeclare += "declare $nextValueRevScaleName integer; \n"
-                                    // инициализация переменных для сиквенса в psql
+                                    // Инициализация переменных для сиквенса в psql
                                     sqlQueryScaleObjInit += "$nextValueRevScaleName=nextval('${CommonConstants().commonSequence}'); \n"
 
                                     // insert в таблицу аудита новой записи объекта linkObject
@@ -1657,13 +1673,13 @@ object CheckObject {
                                             "insertAudValues"
                                         )
 
-                                    // формирую список новых объектов scalableAmount с новым id в рамках тарифа
+                                    // Формирую список новых объектов scalableAmount с новым id в рамках тарифа
                                     listNewScalableAmountObject.add(
                                         ScaleAmountInDB(newScalableAmountObject, idScalableAmountObjectInDB)
                                     )
                                 }
 
-                                // работа с объектами scaleComponentValue
+                                // Работа с объектами scaleComponentValue
                                 for (scaleComponentValueObject in oneLinkObject.row.scaleObjects.filter { it.code.lowercase() == scalable.scaleComponentValueClassName }
                                     .filter { it.row.fields.find { fields -> fields.fieldName.lowercase() == scalable.scalableAmountFieldName && fields.fieldValue == idScalableAmountObjectInFile } != null }
                                 ) {
@@ -1672,7 +1688,7 @@ object CheckObject {
                                             val idScaleComponentValueObjectInDB =
                                                 loadObject.nextSequenceValue(scaleComponentValueClass)
 
-                                            // перед формированием запроса для объекта scaleComponentValue подставляю значение полей component_id и scalable_amount_id
+                                            // Перед формированием запроса для объекта scaleComponentValue подставляю значение полей component_id и scalable_amount_id
                                             indexOfField =
                                                 scaleComponentValueObject.row.fields.indexOfFirst { it.fieldName.lowercase() == scalable.scaleComponentValueFieldName }
                                             scaleComponentValueObject.row.fields[indexOfField].fieldValue =
@@ -1696,9 +1712,9 @@ object CheckObject {
                                             nextValueRevScaleName = "nextValueRevScale$cntForLinkObInQuery"
                                             cntForLinkObInQuery++
 
-                                            // объявление переменных для значений сиквенса в psql
+                                            // Объявление переменных для значений сиквенса в psql
                                             sqlQueryScaleObjDeclare += "declare $nextValueRevScaleName integer; \n"
-                                            // инициализация переменных для сиквенса в psql
+                                            // Инициализация переменных для сиквенса в psql
                                             sqlQueryScaleObjInit += "$nextValueRevScaleName=nextval('${CommonConstants().commonSequence}'); \n"
 
                                             // insert в таблицу аудита новой записи объекта linkObject
@@ -1767,7 +1783,7 @@ object CheckObject {
                     isGenerateObjIdInDB = false
                 }
 
-                // поиск id референсного объекта в бд приемнике
+                // Поиск id референсного объекта в бд приемнике
                 idObjectInDB =
                     loadObject.getObjIdInDB(
                         oneRefObject.row.fields,
@@ -1793,7 +1809,7 @@ object CheckObject {
                 exitProcess(-1)
             }
 
-            // установка нового значения референса
+            // Установка нового значения референса
             val indexOfRefField = oneLoadObjFields.indexOfFirst { it.fieldName == refField }
             if (idObjectInDB == "-" && isSetNullValue) {
                 oneLoadObjFields[indexOfRefField].fieldValue = null

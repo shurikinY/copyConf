@@ -63,8 +63,8 @@ object LoadObject {
             exitFromProgram()
         }
 
-        // цикл по главным объектам (главные объекты это объекты, которые нужно загрузить в БД).
-        // если главный объект успешно загружен, то добавляю в список его полей Fields("@isLoad","1")
+        // Цикл по главным объектам (главные объекты это объекты, которые нужно загрузить в БД).
+        // Если главный объект успешно загружен, то добавляю в список его полей Fields("@isLoad","1")
         for (oneLoadObject in allLoadObject.element) {
 
             // поиск описания класса референсного объекта в файле конфигурации
@@ -91,30 +91,29 @@ object LoadObject {
 
         val oneLoadObject = chainLoadObject.last()
 
-        // если у главного объекта есть референсы refObject, которые тоже являются главным объектом,
+        // Если у главного объекта есть референсы refObject, которые тоже являются главным объектом,
         // то сначала нужно найти эти референсы и загрузить их
         for (oneRefObject in oneLoadObject.row.refObject) {
 
-            // поиск описания класса референсного объекта в файле конфигурации
+            // Поиск описания класса референсного объекта в файле конфигурации
             val oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneRefObject.code }!!
 
-            // поиск референсного объекта среди главных объектов.
-            // если indexInAllLoadObject > -1, то референсный объект найден среди главных
+            // Поиск референсного объекта среди главных объектов.
+            // Если indexInAllLoadObject > -1, то референсный объект найден среди главных
             val indexInAllLoadObject =
-                //CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
                 checkObject.findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
 
-            // нашли референсный объект среди главных объектов. теперь проверка референсов найденного главного объекта
+            // Нашли референсный объект среди главных объектов. Теперь проверка референсов найденного главного объекта
             if (indexInAllLoadObject > -1) {
 
-                // референсы подобного типа пропускаю, т.к. они заведомо закольцованы и при загрузке обрабатываются отдельным образом
+                // Референсы подобного типа пропускаю, т.к. они заведомо закольцованы и при загрузке обрабатываются отдельным образом
                 if (oneRefObject.typeRef.lowercase() == "inchild") {
                     continue
                 }
 
                 chainLoadObject.add(allLoadObject[indexInAllLoadObject])
 
-                // рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
+                // Рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
                 loadOneObject(
                     chainLoadObject,
                     oneConfClassRefObj,
@@ -124,25 +123,24 @@ object LoadObject {
             }
         }
 
-        // если у главного объекта есть референсы linkObjects, которые тоже являются главным объектом,
+        // Если у главного объекта есть референсы linkObjects, которые тоже являются главным объектом,
         // то сначала нужно найти эти референсы и загрузить их
         for (oneLinkObject in oneLoadObject.row.linkObjects) {
             for (oneRefObject in oneLinkObject.row.refObject) {
-                // поиск описания класса референсного объекта в файле конфигурации
+                // Поиск описания класса референсного объекта в файле конфигурации
                 val oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneRefObject.code }!!
 
-                // поиск референсного объекта среди главных объектов.
-                // если indexInAllLoadObject > -1, то референсный объект найден среди главных
+                // Поиск референсного объекта среди главных объектов.
+                // Если indexInAllLoadObject > -1, то референсный объект найден среди главных
                 val indexInAllLoadObject =
-                    //CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
                     checkObject.findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
 
-                // нашли референсный объект среди главных объектов. теперь проверка референсов найденного главного объекта
+                // Нашли референсный объект среди главных объектов. Теперь проверка референсов найденного главного объекта
                 if (indexInAllLoadObject > -1) {
 
                     chainLoadObject.add(allLoadObject[indexInAllLoadObject])
 
-                    // рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
+                    // Рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
                     loadOneObject(
                         chainLoadObject,
                         oneConfClassRefObj,
@@ -152,25 +150,24 @@ object LoadObject {
                 }
             }
 
-            // если у linkObjects есть свои linkObject со своими референсами, которые тоже являются главным объектом,
+            // Если у linkObjects есть свои linkObject со своими референсами, которые тоже являются главным объектом,
             // то сначала нужно найти эти референсы и загрузить их
             for (oneLinkObject2Lvl in oneLinkObject.row.linkObjects) {
                 for (oneRefObject in oneLinkObject2Lvl.row.refObject) {
-                    // поиск описания класса референсного объекта в файле конфигурации
+                    // Поиск описания класса референсного объекта в файле конфигурации
                     val oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneRefObject.code }!!
 
-                    // поиск референсного объекта среди главных объектов.
-                    // если indexInAllLoadObject > -1, то референсный объект найден среди главных
+                    // Поиск референсного объекта среди главных объектов.
+                    // Если indexInAllLoadObject > -1, то референсный объект найден среди главных
                     val indexInAllLoadObject =
-                        //CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
                         checkObject.findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
 
-                    // нашли референсный объект среди главных объектов. теперь проверка референсов найденного главного объекта
+                    // Нашли референсный объект среди главных объектов. Теперь проверка референсов найденного главного объекта
                     if (indexInAllLoadObject > -1) {
 
                         chainLoadObject.add(allLoadObject[indexInAllLoadObject])
 
-                        // рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
+                        // Рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
                         loadOneObject(
                             chainLoadObject,
                             oneConfClassRefObj,
@@ -184,21 +181,20 @@ object LoadObject {
 
         for (oneScaleObject in oneLoadObject.row.scaleObjects) {
             for (oneRefObject in oneScaleObject.row.refObject) {
-                // поиск описания класса референсного объекта в файле конфигурации
+                // Поиск описания класса референсного объекта в файле конфигурации
                 val oneConfClassRefObj = jsonConfigFile.objects.find { it.code == oneRefObject.code }!!
 
-                // поиск референсного объекта среди главных объектов.
-                // если indexInAllLoadObject > -1, то референсный объект найден среди главных
+                // Поиск референсного объекта среди главных объектов.
+                // Если indexInAllLoadObject > -1, то референсный объект найден среди главных
                 val indexInAllLoadObject =
-                    //CheckObject().findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
                     checkObject.findRefObjAmongMainObj(oneRefObject, oneConfClassRefObj, allLoadObject)
 
-                // нашли референсный объект среди главных объектов. теперь проверка референсов найденного главного объекта
+                // Нашли референсный объект среди главных объектов. Теперь проверка референсов найденного главного объекта
                 if (indexInAllLoadObject > -1) {
 
                     chainLoadObject.add(allLoadObject[indexInAllLoadObject])
 
-                    // рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
+                    // Рекурсивный поиск референсных объектов, которые есть среди главных объектов и их загрузка
                     loadOneObject(
                         chainLoadObject,
                         oneConfClassRefObj,
@@ -209,34 +205,32 @@ object LoadObject {
             }
         }
 
-        // процедура записи главного объекта в базу
-        saveOneObject(oneLoadObject, oneConfClassObj, allLoadObject, jsonConfigFile)
+        // Процедура записи главного объекта в базу
+        saveOneObject(oneLoadObject, oneConfClassObj, jsonConfigFile)
     }
 
-    // запись главного объекта в базу
+    // Запись главного объекта в базу
     private fun saveOneObject(
         oneLoadObject: DataDB,
         oneConfClassObj: ObjectCfg,
-        allLoadObject: List<DataDB>,
         jsonConfigFile: RootCfg
     ) {
 
-        // если объект уже загружался, то его поле @isLoad=1
+        // Если объект уже загружался, то его поле @isLoad=1
         if (Fields("@isLoad", "1") in oneLoadObject.row.fields) {
             return
         }
 
-        // формирование запроса для изменения данных в базе
-        createSaveObjSql(oneLoadObject, oneConfClassObj, allLoadObject, jsonConfigFile)
+        // Формирование запроса для изменения данных в базе
+        createSaveObjSql(oneLoadObject, oneConfClassObj, jsonConfigFile)
 
         oneLoadObject.row.fields += Fields("@isLoad", "1")
     }
 
-    // формирование запроса для изменения данных в базе
+    // Формирование запроса для изменения данных в базе
     private fun createSaveObjSql(
         oneLoadObject: DataDB,
         oneConfClassObj: ObjectCfg,
-        allLoadObject: List<DataDB>,
         jsonConfigFile: RootCfg
     ) {
 
@@ -253,27 +247,27 @@ object LoadObject {
         val actionWithObject =
             listOfActionWithObject.find { it.classCode == oneLoadObject.code && it.id == oneLoadObject.row.fields.find { fields -> fields.fieldName == oneConfClassObj.keyFieldIn }!!.fieldValue!! }
 
-        // получаю идентификатор объекта в базе приемнике, либо генерю новый
+        // Получаю идентификатор объекта в базе приемнике, либо генерю новый
 
         val idObjectInDB = getObjIdInDB(oneLoadObject.row.fields, oneConfClassObj, 0, true)
 
-        // если у класса есть шкала, то работаем с ней
+        // Если у класса есть шкала, то работаем с ней
         if (scalable.isClassHaveScale(oneConfClassObj)) {
 
-            // идентификатор шкалы в файле
+            // Идентификатор шкалы в файле
             var idScaleInFile = ""
 
-            // идентификатор шкалы в БД
+            // Идентификатор шкалы в БД
             val idScaleInDB = findScaleIdInDB(oneConfClassObj, idObjectInDB)
 
-            // добавляю новую шкалу в базу
+            // Добавляю новую шкалу в базу
             if (idScaleInDB == "" && isScaleExistsInfile(oneLoadObject)) {
 
-                // ид шкалы в файле уже изменен на нужный. Получаю его
+                // Ид шкалы в файле уже изменен на нужный. Получаю его
                 idScaleInFile =
                     oneLoadObject.row.fields.find { it.fieldName == scalable.getScaleIdFieldName(oneLoadObject) }!!.fieldValue!!
 
-                // проверка есть в CheckObject "There is no description of scale class in configuration file", поэтому здесь не упадет
+                // Проверка есть в CheckObject "There is no description of scale class in configuration file", поэтому здесь не упадет
                 val scaleClass = scalable.getScaleConfigClassDescription()!!
 
                 val oneScaleObject = DataDB(
@@ -292,9 +286,9 @@ object LoadObject {
 
                 val nextValueRevScaleName = "nextValueRevScaleId"
 
-                // объявление переменных для значений сиквенса в psql
+                // Объявление переменных для значений сиквенса в psql
                 sqlQueryObjDeclare += "declare $nextValueRevScaleName integer; \n"
-                // инициализация переменных для сиквенса в psql
+                // Инициализация переменных для сиквенса в psql
                 sqlQueryObjInit += "$nextValueRevScaleName=nextval('${CommonConstants().commonSequence}'); \n"
 
                 // insert в таблицу аудита новой записи
@@ -309,10 +303,10 @@ object LoadObject {
             }
         }
 
-        // формирование условий запроса update/insert главного объекта
+        // Формирование условий запроса update/insert главного объекта
         if (actionWithObject != null && !actionWithObject.actionSkip) {
 
-            // формирование запроса для добавления/обновления основного объекта
+            // Формирование запроса для добавления/обновления основного объекта
             if (actionWithObject.actionUpdateMainRecord || actionWithObject.actionInsert) {
 
                 if (actionWithObject.actionUpdateMainRecord) {
@@ -324,7 +318,7 @@ object LoadObject {
                 sqlQueryObjDeclare += "declare $nextValueRevName integer; \n"
                 sqlQueryObjInit += "$nextValueRevName = nextval('${CommonConstants().commonSequence}'); \n"
 
-                // формирование условий запроса insert в таблицу аудита главного объекта
+                // Формирование условий запроса insert в таблицу аудита главного объекта
                 sqlQueryObjMain +=
                     createMainInsUpdQuery(
                         oneLoadObject,
@@ -341,7 +335,6 @@ object LoadObject {
                     createRefTablesQuery(
                         oneLoadObject,
                         oneConfClassObj,
-                        allLoadObject,
                         jsonConfigFile,
                         idObjectInDB,
                         "mainObject"
@@ -354,7 +347,7 @@ object LoadObject {
                 sqlQueryLinkObject += actionWithObject.queryToUpdateLinkRecObject
             }
 
-            // запрос на изменение основного объекта, его refTables и linkObjects
+            // Запрос на изменение основного объекта, его refTables и linkObjects
             sqlQuery = "\nDO $$ \n" +
                     "declare revTimeStamp numeric(18,0); \n" +
                     "declare dateNow timestamp; \n" +
@@ -391,13 +384,12 @@ object LoadObject {
 
     }
 
-    // внести изменение в базу в рамках транзакции
+    // Внести изменение в базу в рамках транзакции
     private fun createTranSaveObj(
         sqlQuery: String,
         oneLoadObject: DataDB,
         oneConfClassObj: ObjectCfg
     ) {
-
         try {
             val connect = DatabaseConnection.getConnection(javaClass.toString(), oneConfClassObj.aliasDb)
             connect.autoCommit = false
@@ -423,16 +415,14 @@ object LoadObject {
                     -1
                 ) + "\n" + "<The error with query>. " + e.message
             )
-            //exitProcess(-1)
             exitFromProgram()
         }
     }
 
-    // формирование запроса на вставку данных в таблицы связи, описанные в параметре refTables файла конфигурации
+    // Формирование запроса на вставку данных в таблицы связи, описанные в параметре refTables файла конфигурации.
     public fun createRefTablesQuery(
         oneLoadObject: DataDB,
         oneConfClassObj: ObjectCfg,
-        allLoadObject: List<DataDB>?,
         jsonConfigFile: RootCfg,
         idObjectInDB: String,
         typeLoadObject: String // mainObject обработка refTables главного объекта, linkObject обработка refTables объекта linkObject
@@ -441,33 +431,25 @@ object LoadObject {
         var idRefObjectInDB: String
         var sqlQueryLinkTable = ""
 
-        // все ссылки refTables из конфигурации
+        // Все ссылки refTables из конфигурации
         for (oneConfLinkObj in oneConfClassObj.refTables) {
-            // все референсы типа refTables того же класса, что и найденный в конфигурации
+            // Все референсы типа refTables того же класса, что и найденный в конфигурации
             for (oneRefTables in oneLoadObject.row.refObject.filter { it.typeRef == "refTables" && it.code == oneConfLinkObj.codeRef }) {
 
                 val oneRefLinkClass = jsonConfigFile.objects.find { it.code == oneRefTables.code }!!
 
-                if (allLoadObject != null && typeLoadObject == "mainObject") {
-                    val indexInAllCheckObject =
-                        checkObject.findRefObjAmongMainObj(oneRefTables, oneRefLinkClass, allLoadObject)
-                    if (indexInAllCheckObject > -1) {
-
-                        val item = allLoadObject[indexInAllCheckObject]
-                        idRefObjectInDB = getObjIdInDB(item.row.fields, oneRefLinkClass, 0, true)
-                        sqlQueryLinkTable += "insert into ${oneConfLinkObj.table} (${oneConfLinkObj.refField},${oneConfLinkObj.refFieldTo}) " +
-                                "values('$idObjectInDB','$idRefObjectInDB'); \n"
-                    }
-                } else {
-                    idRefObjectInDB =
-                        getObjIdInDB(oneRefTables.row.fields, oneRefLinkClass, oneRefTables.nestedLevel, true)
-                    sqlQueryLinkTable += "insert into ${oneConfLinkObj.table} (${oneConfLinkObj.refField},${oneConfLinkObj.refFieldTo}) " +
-                            "values('$idObjectInDB','$idRefObjectInDB'); \n"
-                }
+                idRefObjectInDB =
+                    getObjIdInDB(oneRefTables.row.fields, oneRefLinkClass, oneRefTables.nestedLevel, true)
+                sqlQueryLinkTable += "insert into ${oneConfLinkObj.table} (${oneConfLinkObj.refField},${oneConfLinkObj.refFieldTo}) " +
+                        "values('$idObjectInDB','$idRefObjectInDB'); \n"
             }
 
+            // Для главного объекта нужно обновить все ссылки refTables: удалить старые связи и добавить новые для всех референсов типа refTables
+            // Для linkObject нужно обновить все ссылки refTables: нужно только добавить новые связи для всех референсов типа refTables.
+            //   Старые связи для linkObject удалять не нужно, т.к. в случае отличия референсов старый linkObject в БД
+            //   будет удален("audit_state=R/valid_to=current_date-1/будет отвязан от главного объекта для InRefFieldsJson") и добавится новый.
+            //   К новому linkObject будут привязаны все refTables из файла.
             if (sqlQueryLinkTable != "" && typeLoadObject == "mainObject") {
-                //Важно!!! Считаю, что нужно обновить все ссылки и при этом все необходимые ссылки есть в файле данных
                 sqlQueryLinkTable =
                     "delete from ${oneConfLinkObj.table} where ${oneConfLinkObj.refField}='$idObjectInDB'; \n" + sqlQueryLinkTable
             }
@@ -477,12 +459,12 @@ object LoadObject {
 
     }
 
-    // формирование запроса insert/update для основной таблицы загружаемого объекта
+    // Формирование запроса insert/update для основной таблицы загружаемого объекта
     public fun createMainInsUpdQuery(
-        oneLoadObject: DataDB?, // должно быть null только для insertAudSelectValue
+        oneLoadObject: DataDB?, // Должно быть null только для insertAudSelectValue
         oneConfClassObj: ObjectCfg,
         idObjectInDB: String,
-        nextValueRevName: String, // название переменной, в которой значение сиквенса commonSequence. только для работы с таблицей аудита (insertAudValues и insertAudSelectValue)
+        nextValueRevName: String, // Название переменной, в которой значение сиквенса commonSequence. Только для работы с таблицей аудита (insertAudValues и insertAudSelectValue)
         regimQuery: String, // insert в основную таблицу;
         // update основной таблицы;
         // insertAudValues формирование запроса insert в таблицу аудита значений из файла;
@@ -526,7 +508,6 @@ object LoadObject {
             listColName += "${oneConfClassObj.auditDateField},audit_user_id,audit_state,${oneConfClassObj.keyFieldIn}"
             listColValue += "dateNow,'42','A',$idObjectInDB"
         }
-
 
         if (regimQuery == "insert") {
 
@@ -694,32 +675,32 @@ object LoadObject {
         return nextValue
     }
 
-    // создание запроса для изменения полей референсов типа inchild
+    // Создание запроса для изменения полей референсов типа InChild
     private fun createQueryForFamilyObject(
     ) {
-        // цикл по классам в схеме
+        // Цикл по классам в схеме
         for (oneConfigClassDescr in jsonConfigFile.objects) {
-            // цикл по описаниям референсов типа inchild в схеме
+            // Цикл по описаниям референсов типа InChild в схеме
             for (oneRefObjInChildDescr in oneConfigClassDescr.refObjects.filter { it.keyType.lowercase() == "inchild" }) {
-                // цикл по загруженным объектам того класса, в котором есть референс типа inchild
+                // Цикл по загруженным объектам того класса, в котором есть референс типа InChild
                 for (oneLoadObject in allLoadObject.element.filter { it.code == oneConfigClassDescr.code }) {
 
-                    // старый(из бд источника) и новый(в бд приемнике) id загружаемого объекта
+                    // Старый(из бд источника) и новый(в бд приемнике) id загружаемого объекта
                     val oneLoadObjIdOld =
                         oneLoadObject.row.fields.find { it.fieldName == oneConfigClassDescr.keyFieldIn }!!.fieldValue
                     val oneLoadObjIdNew =
                         dataObjectDestList.find { it.code == oneConfigClassDescr.code && it.id == oneLoadObjIdOld }!!.idDest
 
-                    // класс ссылочного поля типа inchild
+                    // Класс ссылочного поля типа InChild
                     val oneConfClassRefInChild =
                         jsonConfigFile.objects.find { it.code == oneRefObjInChildDescr.codeRef }!!
 
-                    // текущее значение ссылочного поля типа inchild в базе
-                    // если refFieldValueOld = null, то в файле ссылочное поле не заполнено
+                    // Текущее значение ссылочного поля типа InChild в базе.
+                    // Если refFieldValueOld = null, то в файле ссылочное поле не заполнено
                     val refFieldValueOld =
                         dataObjectDestList.find { it.code == oneConfigClassDescr.code && it.id == oneLoadObjIdOld }!!.listChildRef.find { it.fieldName == oneRefObjInChildDescr.refField }?.fieldValue
 
-                    // новое значение id объекта из поля типа inchild. если refFieldValueNew = null, значит объект уже был в базе и значение ссылочного поля в бд правильное
+                    // Новое значение id объекта из поля типа InChild. Если refFieldValueNew = null, значит объект уже был в базе и значение ссылочного поля в бд правильное
                     val refFieldValueNew =
                         dataObjectDestList.find { it.code == oneConfClassRefInChild.code && it.id == refFieldValueOld }?.idDest
 
@@ -731,7 +712,7 @@ object LoadObject {
 
                         val nextValueRevChildName = "nextValueChildId"
 
-                        // объявление переменных для значений сиквенса в psql
+                        // Объявление переменных для значений сиквенса в psql
                         var sqlQuery = "\nDO $$ \n" +
                                 "declare revTimeStamp numeric(18,0); \n" +
                                 "declare dateNow timestamp; \n" +
@@ -747,7 +728,7 @@ object LoadObject {
                             "update"
                         )
 
-                        // инициализация переменных для сиквенса в psql
+                        // Инициализация переменных для сиквенса в psql
                         sqlQuery += "$nextValueRevChildName=nextval('${CommonConstants().commonSequence}'); \n"
 
                         // insert в таблицу аудита обновленной записи
@@ -781,7 +762,7 @@ object LoadObject {
         }
     }
 
-    // знаю ид тарифа в БД приемнике. ищу связанную с ним шкалу
+    // Знаю ид тарифа в БД приемнике. Ищу связанную с ним шкалу
     public fun findScaleIdInDB(
         oneConfClassObj: ObjectCfg,
         idObjectInDB: String
@@ -789,9 +770,8 @@ object LoadObject {
 
         var idScaleInDB = ""
 
-        // если закачиваемый тариф есть в БД приемнике, то беру ид шкалы у него
+        // Если закачиваемый тариф есть в БД приемнике, то беру ид шкалы у него
         val connCompare = DatabaseConnection.getConnection(javaClass.toString(), oneConfClassObj.aliasDb)
-        //val connCompare = DriverManager.getConnection(CONN_STRING, CONN_LOGIN, CONN_PASS)
         val queryStatement =
             connCompare.prepareStatement("select ${scalable.getScaleIdFieldName(oneConfClassObj)} from ${oneConfClassObj.tableName} where ${oneConfClassObj.keyFieldIn}=$idObjectInDB")
 
@@ -803,7 +783,6 @@ object LoadObject {
             }
         }
         queryStatement.close()
-        //connCompare.close()
         return idScaleInDB
     }
 
@@ -850,7 +829,12 @@ object LoadObject {
                     // Ищу объект, у которого есть референс с keyType=InChild, среди главных объектов.
                     // Заполняю поле главного объекта, в котором хранится ссылка на референс, значением null
                     // Например, для classifierType поле default_value_id станет равно null
-                    for (item in checkObject.allCheckObject.element.filter { it.code.equals(oneConfigClass.code, true) }) {
+                    for (item in checkObject.allCheckObject.element.filter {
+                        it.code.equals(
+                            oneConfigClass.code,
+                            true
+                        )
+                    }) {
                         if (item.row.fields.find {
                                 it.fieldName.equals(oneConfigClass.keyFieldIn, true)
                                         && it.fieldValue.equals(refFieldIdValue, true)
