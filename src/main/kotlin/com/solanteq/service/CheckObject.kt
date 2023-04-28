@@ -2248,9 +2248,9 @@ object CheckObject {
     // Поиск идентификатора объекта из БД приемника по идентификаторы из БД источника.
     // Поиск осуществляется в списке соответствий идентификаторов из файла и из БД приемника.
     // Не должен возвращать null!
-    private fun getObjectDestId(oneCfgLinkObj: LinkObjects, objectIdFromFile: String): String? {
+    private fun getObjectDestId(oneCfgLinkObj: LinkObjects, objectIdFromFile: String): String {
         return loadObject.getDataObjectDestList()
-            .find { it.code == oneCfgLinkObj.codeRef && it.id == objectIdFromFile }?.idDest
+            .find { it.code == oneCfgLinkObj.codeRef && it.id == objectIdFromFile }!!.idDest
     }
 
 }
