@@ -45,6 +45,8 @@ data class LinkObjects(
     val keyType: String
 )
 
+// Используется для хранения всех референсов в однородном массиве.
+// Потом этот массив записывается в класс RefObject
 data class RefObjects(
     val record: String = "",
     val refField: String,

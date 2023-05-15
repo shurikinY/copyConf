@@ -420,7 +420,7 @@ class ReaderDB {
                     if (!resultFieldValue.isBeforeFirst) {
                         var refFieldName = ""
                         if (itemRefObject.keyType.lowercase() == "in" || itemRefObject.keyType.lowercase() == "inparent" || itemRefObject.keyType.lowercase() == "inchild" ||
-                            itemRefObject.keyType.lowercase() == "inparentscale" || itemRefObject.keyType.lowercase() == "inscale"
+                            itemRefObject.keyType.lowercase() == "inparentscale" || itemRefObject.keyType.lowercase() == "inscale" || itemRefObject.keyType.lowercase() == "incycle"
                         ) {
                             refFieldName = jsonConfigObject.keyFieldIn
                         } else if (itemRefObject.keyType.lowercase() == "out") {
@@ -752,7 +752,7 @@ class ReaderDB {
         var conditionSql = ""
 
         if (itemRefObject.keyType.lowercase() == "in" || itemRefObject.keyType.lowercase() == "inparent" || itemRefObject.keyType.lowercase() == "inchild" ||
-            itemRefObject.keyType.lowercase() == "inparentscale" || itemRefObject.keyType.lowercase() == "inscale"
+            itemRefObject.keyType.lowercase() == "inparentscale" || itemRefObject.keyType.lowercase() == "inscale" || itemRefObject.keyType.lowercase() == "incycle"
         ) {
             refField = jsonConfigObject.keyFieldIn
         } else if (itemRefObject.keyType.lowercase() == "out") {
@@ -1075,7 +1075,7 @@ class ReaderDB {
             queryStatement = conn.prepareStatement(sqlQuery)
             queryResult = queryStatement.executeQuery()
             if (!queryResult.isBeforeFirst) {
-                showErrorRefTablesMsg(jsonCfgOneObj, tblFieldsOneObj, oneLinkRefObj.table,  refConfClass.aliasDb)
+                showErrorRefTablesMsg(jsonCfgOneObj, tblFieldsOneObj, oneLinkRefObj.table, refConfClass.aliasDb)
                 exitProcess(-1)
             }
             var countRefTablesReference = 0
@@ -1093,8 +1093,8 @@ class ReaderDB {
                 )
                 countRefTablesReference++
             }
-            if (countRefTablesReference != listOfRefId.size){
-                showErrorRefTablesMsg(jsonCfgOneObj, tblFieldsOneObj, oneLinkRefObj.table,  refConfClass.aliasDb)
+            if (countRefTablesReference != listOfRefId.size) {
+                showErrorRefTablesMsg(jsonCfgOneObj, tblFieldsOneObj, oneLinkRefObj.table, refConfClass.aliasDb)
                 exitProcess(-1)
             }
             queryStatement.close()
@@ -1659,7 +1659,7 @@ class ReaderDB {
         jsonCfgOneObj: ObjectCfg,
         tblFieldsOneObj: List<Fields>,
         tableName: String,
-        aliasDB :String?
+        aliasDB: String?
     ) {
         logger.error(
             CommonFunctions().createObjectIdForLogMsg(

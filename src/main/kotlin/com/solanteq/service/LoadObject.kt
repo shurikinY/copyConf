@@ -106,8 +106,10 @@ object LoadObject {
             // Нашли референсный объект среди главных объектов. Теперь проверка референсов найденного главного объекта
             if (indexInAllLoadObject > -1) {
 
+                val refKeyType = checkObject.getRefKeyType(oneConfClassRefObj, oneRefObject)
+
                 // Референсы подобного типа пропускаю, т.к. они заведомо закольцованы и при загрузке обрабатываются отдельным образом
-                if (oneRefObject.typeRef.lowercase() == "inchild") {
+                if (oneRefObject.typeRef.lowercase() == "inchild" || refKeyType.equals("InCycle",true)) {
                     continue
                 }
 

@@ -866,9 +866,13 @@ object CheckObject {
             // Нашли референсный объект среди главных объектов. Теперь проверка референсов найденного главного объекта
             if (indexInAllCheckObject > -1) {
 
+                val refKeyType = getRefKeyType(oneConfClassRefObj, oneRefObject)
+
                 // Если в цепочке референсов встретили объект проверяемый главный объект, то ошибка
                 if (chainCheckObject.first() == allCheckObject[indexInAllCheckObject] &&
-                    oneRefObject.typeRef.lowercase() != "inparent" && oneRefObject.typeRef.lowercase() != "inchild"
+                    oneRefObject.typeRef.lowercase() != "inparent" &&
+                    oneRefObject.typeRef.lowercase() != "inchild" &&
+                    !refKeyType.equals("InCycle", true)
                 ) {
                     val mainClass = jsonConfigFile.objects.find { it.code == chainCheckObject.first().code }!!
                     logger.error(
@@ -884,7 +888,7 @@ object CheckObject {
                     )
                     exitProcess(-1)
                 } else if (chainCheckObject.first() == allCheckObject[indexInAllCheckObject] &&
-                    (oneRefObject.typeRef.lowercase() == "inparent" || oneRefObject.typeRef.lowercase() == "inchild")
+                    (oneRefObject.typeRef.lowercase() == "inparent" || oneRefObject.typeRef.lowercase() == "inchild" || refKeyType.equals("InCycle", true))
                 ) {
                     // Референсы подобного типа пропускаю, т.к. они заведомо закольцованы и при загрузке обрабатываются отдельным образом
                     continue
@@ -2261,7 +2265,7 @@ object CheckObject {
         }
     }
 
-    // Поиск идентификатора объекта из БД приемника по идентификаторы из БД источника.
+    // Поиск идентификатора объекта из БД приемника по идентификатору из БД источника.
     // Поиск осуществляется в списке соответствий идентификаторов из файла и из БД приемника.
     // Не должен возвращать null!
     private fun getObjectDestId(oneCfgLinkObj: LinkObjects, objectIdFromFile: String): String {
@@ -2269,4 +2273,30 @@ object CheckObject {
             .find { it.code == oneCfgLinkObj.codeRef && it.id == objectIdFromFile }!!.idDest
     }
 
+    // Поиск keyType переданного референса oneRefObject в классе oneConfClassRefObj из файла настройки
+    fun getRefKeyType(oneConfClassRefObj: ObjectCfg, oneRefObject: RefObject): String {
+        var resultKeyType = ""
+
+        if (oneRefObject.typeRef.equals("refFieldsJson", true)) {
+            for (itemRefFieldsJson in oneConfClassRefObj.refFieldsJson) {
+                for (itemRefObject in itemRefFieldsJson.refObjects!!.filter { it.codeRef == oneRefObject.code && it.refField == oneRefObject.fieldRef }) {
+                    resultKeyType = itemRefObject.keyType
+                }
+            }
+        }
+
+        if (resultKeyType.isEmpty()){
+            logger.error(
+                CommonFunctions().createObjectIdForLogMsg(
+                    oneConfClassRefObj.code,
+                    oneConfClassRefObj.keyFieldIn,
+                    oneRefObject.row.fields,
+                    -1
+                ) + "<No keyType found.>"
+            )
+            exitProcess(-1)
+        }
+
+        return resultKeyType
+    }
 }
